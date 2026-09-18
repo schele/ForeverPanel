@@ -91,7 +91,7 @@ end
 
 ns.Bar:RegisterModule({
     name = "clock",
-    side = "CENTER",
+    side = "RIGHT",
     order = 10,
     interval = 1,
     events = { "PLAYER_ENTERING_WORLD" },

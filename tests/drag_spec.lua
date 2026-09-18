@@ -13,6 +13,12 @@ local function loggedIn(options)
         env.xp, env.xpMax = 500, 1000
     end
 
+    -- Seed a starting arrangement rather than leaning on the default layout,
+    -- which is a display preference and has changed before.
+    if options.layout then
+        env.ForeverPanelDB = { bar = { layout = options.layout } }
+    end
+
     helpers.login(ns, env)
     env.ForeverBar.width = BAR_WIDTH
     env.ForeverBar.left = 0
@@ -29,6 +35,16 @@ local function dragTo(ns, env, name, x)
     env.__runTimers()
     return module
 end
+
+--- An explicit starting arrangement for the drag tests.
+-- Stated here rather than relying on the default layout, which is a display
+-- preference and has changed twice already; a drag test should only break when
+-- dragging breaks.
+local START = {
+    money = { side = "LEFT", order = 10 },
+    xp = { side = "LEFT", order = 20 },
+    clock = { side = "RIGHT", order = 10 },
+}
 
 local function orderOn(ns, side)
     local list = {}
@@ -108,17 +124,17 @@ end)
 
 describe("dragging a module", function()
     it("moves a module to another side", function()
-        local ns, env = loggedIn()
-
-        assertEqual("RIGHT", ns.Bar:GetModule("money").side)
-        dragTo(ns, env, "money", 20)
+        local ns, env = loggedIn({ layout = START })
 
         assertEqual("LEFT", ns.Bar:GetModule("money").side)
-        assertEqual("money,xp", orderOn(ns, "LEFT"), "dropped left of xp")
+        dragTo(ns, env, "money", 890)
+
+        assertEqual("RIGHT", ns.Bar:GetModule("money").side)
+        assertEqual("xp", orderOn(ns, "LEFT"), "money left the left side")
     end)
 
     it("reorders within a side", function()
-        local ns, env = loggedIn()
+        local ns, env = loggedIn({ layout = START })
 
         dragTo(ns, env, "money", 20)
         assertEqual("money,xp", orderOn(ns, "LEFT"))
@@ -129,7 +145,7 @@ describe("dragging a module", function()
     end)
 
     it("dims the module while it is held and restores it on drop", function()
-        local ns, env = loggedIn()
+        local ns, env = loggedIn({ layout = START })
         local module = ns.Bar:GetModule("money")
 
         module.frame.scripts.OnDragStart(module.frame)
@@ -142,18 +158,18 @@ describe("dragging a module", function()
     end)
 
     it("does nothing while the bar is locked", function()
-        local ns, env = loggedIn()
+        local ns, env = loggedIn({ layout = START })
         helpers.command(env, "bar lock")
         assertTrue(ns.db.bar.locked)
 
-        dragTo(ns, env, "money", 20)
+        dragTo(ns, env, "money", 890)
 
-        assertEqual("RIGHT", ns.Bar:GetModule("money").side, "money stayed put")
+        assertEqual("LEFT", ns.Bar:GetModule("money").side, "money stayed put")
         assertFalse(ns.Bar:IsDragging())
     end)
 
     it("keeps the layout consistent after a move", function()
-        local ns, env = loggedIn()
+        local ns, env = loggedIn({ layout = START })
         dragTo(ns, env, "money", 20)
 
         assertEqual("LEFT", ns.Bar:GetModule("money").frame:GetPoint(1))
@@ -161,8 +177,17 @@ describe("dragging a module", function()
     end)
 
     it("drops onto a side whose only module is hidden", function()
-        -- At max level the xp module is hidden, so the left side looks empty.
-        local ns, env = loggedIn({ maxLevel = true })
+        -- At max level the xp module is hidden, so the left side looks empty
+        -- even though xp is sitting there.
+        local ns, env = loggedIn({
+            maxLevel = true,
+            layout = {
+                xp = { side = "LEFT", order = 10 },
+                money = { side = "RIGHT", order = 20 },
+                clock = { side = "RIGHT", order = 10 },
+            },
+        })
+        assertEqual("LEFT", ns.Bar:GetModule("xp").side)
         assertFalse(ns.Bar:GetModule("xp").shown, "xp is hidden at max level")
 
         dragTo(ns, env, "clock", 20)
@@ -175,7 +200,7 @@ end)
 
 describe("saved module order", function()
     it("writes the new order to saved variables", function()
-        local ns, env = loggedIn()
+        local ns, env = loggedIn({ layout = START })
         dragTo(ns, env, "money", 20)
 
         local saved = ns.db.bar.layout
@@ -185,7 +210,7 @@ describe("saved module order", function()
     end)
 
     it("restores the order on the next login", function()
-        local first, firstEnv = loggedIn()
+        local first, firstEnv = loggedIn({ layout = START })
         dragTo(first, firstEnv, "money", 20)
         local stored = firstEnv.ForeverPanelDB
 
@@ -198,15 +223,15 @@ describe("saved module order", function()
     end)
 
     it("puts everything back with bar reset", function()
-        local ns, env = loggedIn()
+        local ns, env = loggedIn({ layout = START })
         dragTo(ns, env, "money", 20)
         assertEqual("LEFT", ns.Bar:GetModule("money").side)
 
         helpers.command(env, "bar reset")
 
-        assertEqual("RIGHT", ns.Bar:GetModule("money").side)
+        assertEqual("LEFT", ns.Bar:GetModule("money").side)
         assertEqual("LEFT", ns.Bar:GetModule("xp").side)
-        assertEqual("CENTER", ns.Bar:GetModule("clock").side)
+        assertEqual("RIGHT", ns.Bar:GetModule("clock").side)
         assertEqual(0, next(ns.db.bar.layout) and 1 or 0, "saved layout cleared")
     end)
 
@@ -215,6 +240,6 @@ describe("saved module order", function()
         env.ForeverPanelDB = { bar = { layout = { money = { side = "TOP", order = 5 } } } }
         helpers.login(ns, env)
 
-        assertEqual("RIGHT", ns.Bar:GetModule("money").side, "fell back to the default")
+        assertEqual("LEFT", ns.Bar:GetModule("money").side, "fell back to the default")
     end)
 end)

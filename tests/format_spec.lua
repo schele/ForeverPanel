@@ -4,8 +4,8 @@ local ns = helpers.loadAddon()
 local plain = helpers.plain
 
 describe("FormatMoney", function()
-    it("always shows all three denominations, zero padded", function()
-        assertEqual("0 00 00", plain(ns.FormatMoney(0, 12)))
+    it("always shows all three denominations", function()
+        assertEqual("0 0 0", plain(ns.FormatMoney(0, 12)))
     end)
 
     it("splits copper into gold, silver and copper", function()
@@ -13,13 +13,14 @@ describe("FormatMoney", function()
         assertEqual("123 45 67", plain(ns.FormatMoney(1234567, 12)))
     end)
 
-    it("pads silver and copper so the width stays stable", function()
-        assertEqual("0 00 05", plain(ns.FormatMoney(5, 12)))
-        assertEqual("0 05 00", plain(ns.FormatMoney(500, 12)))
+    it("leaves single digits unpadded", function()
+        assertEqual("0 0 5", plain(ns.FormatMoney(5, 12)))
+        assertEqual("0 5 0", plain(ns.FormatMoney(500, 12)))
+        assertEqual("0 1 90", plain(ns.FormatMoney(190, 12)))
     end)
 
     it("groups thousands in the gold amount", function()
-        assertEqual("10,000 00 00", plain(ns.FormatMoney(10000 * 10000, 12)))
+        assertEqual("10,000 0 0", plain(ns.FormatMoney(10000 * 10000, 12)))
     end)
 
     it("includes the three coin icons at the requested size", function()
@@ -30,8 +31,8 @@ describe("FormatMoney", function()
     end)
 
     it("treats negative or missing amounts as zero", function()
-        assertEqual("0 00 00", plain(ns.FormatMoney(-500, 12)))
-        assertEqual("0 00 00", plain(ns.FormatMoney(nil, 12)))
+        assertEqual("0 0 0", plain(ns.FormatMoney(-500, 12)))
+        assertEqual("0 0 0", plain(ns.FormatMoney(nil, 12)))
     end)
 end)
 

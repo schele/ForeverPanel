@@ -9,10 +9,10 @@ local function coinIcon(path, size)
 end
 
 --- Build the money string with the in-game coin icons.
--- Deliberately different from GetCoinTextureString in two ways: all three
--- denominations are always shown (that helper hides zero ones), and silver and
--- copper are zero padded so the string keeps a stable width and does not
--- re-flow the bar on every sale.
+-- Deliberately different from GetCoinTextureString, which hides denominations
+-- that are zero: all three are always shown, so the block reads the same way
+-- whatever you are carrying. Amounts are not padded, so the block does change
+-- width as silver and copper cross ten; the bar re-flows to suit.
 local function formatMoney(copper, iconSize)
     copper = math.max(0, math.floor(tonumber(copper) or 0))
     iconSize = math.max(1, math.floor(tonumber(iconSize) or 12))
@@ -24,7 +24,7 @@ local function formatMoney(copper, iconSize)
     local goldText = BreakUpLargeNumbers and BreakUpLargeNumbers(goldAmount) or tostring(goldAmount)
 
     return string.format(
-        "%s%s %02d%s %02d%s",
+        "%s%s %d%s %d%s",
         goldText,
         coinIcon(GOLD_ICON, iconSize),
         silverAmount,
@@ -38,7 +38,7 @@ ns.FormatMoney = formatMoney
 
 ns.Bar:RegisterModule({
     name = "money",
-    side = "RIGHT",
+    side = "LEFT",
     order = 10,
     events = { "PLAYER_MONEY", "PLAYER_ENTERING_WORLD" },
 

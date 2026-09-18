@@ -6,9 +6,9 @@ Out of the box:
 
 | Side | Module | Shows |
 |---|---|---|
+| Left | `money` | Gold, silver and copper with the in-game coin icons |
 | Left | `xp` | `xx.xx% XP` through the current level, click to count down to the next one instead; hidden at max level or with XP turned off |
-| Centre | `clock` | Local time, click to toggle 12/24 hour |
-| Right | `money` | Gold, silver and copper with the in-game coin icons |
+| Right | `clock` | Local time, click to toggle 12/24 hour |
 
 The bar reserves its own strip of screen: it insets `UIParent` from the top, so
 top-anchored Blizzard frames move down with it instead of being covered.

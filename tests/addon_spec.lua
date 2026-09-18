@@ -236,14 +236,31 @@ describe("money module", function()
         assertEqual("9 87 65", plain(ns.Bar:GetModule("money").text:GetText()))
     end)
 
-    it("sits on the right of the bar", function()
+    it("sits on the left of the bar", function()
         local ns, env = helpers.loadAddon()
         helpers.login(ns, env)
         helpers.firstFrame(env)
 
         local module = ns.Bar:GetModule("money")
-        assertEqual("RIGHT", module.frame:GetPoint(1))
+        assertEqual("LEFT", module.frame:GetPoint(1))
         assertTrue(module.width > 0, "the module reports a width for layout")
+    end)
+end)
+
+describe("the default layout", function()
+    it("puts money and xp on the left, the clock alone on the right", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        assertEqual("LEFT", ns.Bar:GetModule("money").side)
+        assertEqual("LEFT", ns.Bar:GetModule("xp").side)
+        assertEqual("RIGHT", ns.Bar:GetModule("clock").side)
+
+        -- The LEFT side flows left-to-right, so money reads first.
+        assertTrue(
+            ns.Bar:GetModule("money").order < ns.Bar:GetModule("xp").order,
+            "money sits left of the xp block"
+        )
     end)
 end)
 
@@ -349,13 +366,13 @@ describe("the first frame after login", function()
 end)
 
 describe("clock module", function()
-    it("renders the current time and sits in the centre", function()
+    it("renders the current time at the right edge", function()
         local ns, env = helpers.loadAddon()
         helpers.login(ns, env)
 
         local module = ns.Bar:GetModule("clock")
         assertMatch("^%d%d:%d%d$", module.text:GetText())
-        assertEqual("CENTER", module.frame:GetPoint(1))
+        assertEqual("RIGHT", module.frame:GetPoint(1))
     end)
 
     it("toggles 12 and 24 hour on click", function()
