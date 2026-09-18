@@ -8,6 +8,9 @@ ns.AddDefaults({
         enabled = true,
         height = 24,
         pushUIDown = true,
+        locked = false,
+        -- name -> { side, order }, written whenever a module is dragged.
+        layout = {},
     },
 })
 
@@ -15,6 +18,7 @@ local VALID_SIDES = { LEFT = true, CENTER = true, RIGHT = true }
 local EDGE_PADDING = 10
 local MODULE_SPACING = 16
 local MIN_HEIGHT, MAX_HEIGHT = 16, 48
+local DRAG_ALPHA = 0.6
 
 local modules = {}
 local modulesByName = {}
@@ -22,6 +26,14 @@ local eventMap = {}
 local barFrame, dispatcher
 local initialized = false
 local layoutQueued = false
+local dragging, dragSide, dragIndex
+
+local function byOrder(a, b)
+    if a.order ~= b.order then
+        return a.order < b.order
+    end
+    return a.name < b.name
+end
 
 --------------------------------------------------------------------------------
 -- Layout
@@ -42,13 +54,6 @@ local function computeLayout(entries, options)
         if entry.shown ~= false and VALID_SIDES[entry.side] then
             table.insert(bySide[entry.side], entry)
         end
-    end
-
-    local function byOrder(a, b)
-        if a.order ~= b.order then
-            return a.order < b.order
-        end
-        return a.name < b.name
     end
 
     for _, list in pairs(bySide) do
@@ -89,6 +94,61 @@ end
 
 Bar.ComputeLayout = computeLayout
 
+--- Turn anchored positions into plain distances from the bar's left edge, so
+-- drag targets can be compared against the cursor. Pure.
+local function computeCenters(entries, barWidth, options)
+    local positions = computeLayout(entries, options)
+    local widths = {}
+    for _, entry in ipairs(entries) do
+        widths[entry.name] = entry.width or 0
+    end
+
+    local centers = {}
+    for name, position in pairs(positions) do
+        local width = widths[name] or 0
+        if position.anchor == "LEFT" then
+            centers[name] = position.offset + width / 2
+        elseif position.anchor == "RIGHT" then
+            centers[name] = barWidth + position.offset - width / 2
+        else
+            centers[name] = barWidth / 2 + position.offset
+        end
+    end
+
+    return centers
+end
+
+Bar.ComputeCenters = computeCenters
+
+--- Which third of the bar the cursor is over. Pure.
+local function sideForCursor(cursorX, barWidth)
+    if not barWidth or barWidth <= 0 then
+        return "CENTER"
+    end
+    if cursorX < barWidth / 3 then
+        return "LEFT"
+    end
+    if cursorX < barWidth * 2 / 3 then
+        return "CENTER"
+    end
+    return "RIGHT"
+end
+
+Bar.SideForCursor = sideForCursor
+
+--- Where in an ordered list of visible modules the cursor wants to insert. Pure.
+local function dropIndex(orderedNames, centers, cursorX)
+    local index = 1
+    for _, name in ipairs(orderedNames) do
+        if cursorX > (centers[name] or 0) then
+            index = index + 1
+        end
+    end
+    return index
+end
+
+Bar.DropIndex = dropIndex
+
 local function applyLayout()
     layoutQueued = false
     if not barFrame then
@@ -120,6 +180,192 @@ local function queueLayout()
     end
     layoutQueued = true
     C_Timer.After(0, applyLayout)
+end
+
+--------------------------------------------------------------------------------
+-- Saved module order
+--------------------------------------------------------------------------------
+
+local function saveLayout()
+    if not ns.db then
+        return
+    end
+
+    local saved = {}
+    for _, module in ipairs(modules) do
+        saved[module.name] = { side = module.side, order = module.order }
+    end
+    ns.db.bar.layout = saved
+end
+
+local function applySavedLayout()
+    local saved = ns.db and ns.db.bar.layout
+    if type(saved) ~= "table" then
+        return
+    end
+
+    for _, module in ipairs(modules) do
+        local entry = saved[module.name]
+        if type(entry) == "table" and VALID_SIDES[entry.side] and type(entry.order) == "number" then
+            module.side = entry.side
+            module.order = entry.order
+        end
+    end
+end
+
+Bar.ApplySavedLayout = applySavedLayout
+
+local function resetLayout()
+    for _, module in ipairs(modules) do
+        module.side = module.defaultSide
+        module.order = module.defaultOrder
+    end
+
+    if ns.db then
+        ns.db.bar.layout = {}
+    end
+
+    applyLayout()
+end
+
+--- Move a module to a side, inserting it before the visibleIndex-th visible
+-- module already there, then renumber that side so the order sticks.
+local function moveModule(module, side, visibleIndex)
+    local siblings = {}
+    for _, other in ipairs(modules) do
+        if other ~= module and other.side == side then
+            table.insert(siblings, other)
+        end
+    end
+    table.sort(siblings, byOrder)
+
+    -- Translate an index among the visible modules into one in the full list,
+    -- so hidden modules keep their relative place. Dropping in front of
+    -- everything visible must land in front, even when hidden modules sort
+    -- earlier, otherwise the drop lands somewhere the cursor never was.
+    local insertAt, lastVisible = nil, nil
+    local seen = 0
+    for index, other in ipairs(siblings) do
+        if other.shown then
+            seen = seen + 1
+            lastVisible = index
+            if seen == visibleIndex then
+                insertAt = index
+                break
+            end
+        end
+    end
+
+    if not insertAt then
+        insertAt = lastVisible and (lastVisible + 1) or 1
+    end
+
+    module.side = side
+    table.insert(siblings, insertAt, module)
+
+    for index, other in ipairs(siblings) do
+        other.order = index * 10
+    end
+
+    saveLayout()
+end
+
+Bar.MoveModule = moveModule
+
+--------------------------------------------------------------------------------
+-- Dragging
+--------------------------------------------------------------------------------
+
+local function cursorOffsetInBar()
+    if not barFrame or type(GetCursorPosition) ~= "function" then
+        return nil
+    end
+
+    local scale = barFrame:GetEffectiveScale()
+    if not scale or scale == 0 then
+        return nil
+    end
+
+    local left = barFrame:GetLeft()
+    if not left then
+        return nil
+    end
+
+    return (GetCursorPosition() / scale) - left
+end
+
+--- Live reordering: while a module is held, it is moved into the slot the
+-- cursor is over, so the bar itself is the drag preview.
+function Bar:UpdateDrag()
+    if not dragging or not barFrame then
+        return
+    end
+
+    local cursorX = cursorOffsetInBar()
+    if not cursorX then
+        return
+    end
+
+    local barWidth = barFrame:GetWidth()
+    local side = sideForCursor(cursorX, barWidth)
+    local centers = computeCenters(modules, barWidth)
+
+    local neighbours = {}
+    for _, module in ipairs(modules) do
+        if module ~= dragging and module.side == side and module.shown then
+            table.insert(neighbours, module)
+        end
+    end
+    table.sort(neighbours, byOrder)
+
+    local names = {}
+    for index, module in ipairs(neighbours) do
+        names[index] = module.name
+    end
+
+    local index = dropIndex(names, centers, cursorX)
+
+    if side ~= dragSide or index ~= dragIndex then
+        dragSide, dragIndex = side, index
+        moveModule(dragging, side, index)
+        applyLayout()
+    end
+end
+
+function Bar:StartDrag(module)
+    if not barFrame or ns.db.bar.locked or dragging then
+        return
+    end
+
+    dragging = module
+    dragSide, dragIndex = nil, nil
+    module.frame:SetAlpha(DRAG_ALPHA)
+    barFrame:SetScript("OnUpdate", function()
+        Bar:UpdateDrag()
+    end)
+
+    self:UpdateDrag()
+end
+
+function Bar:StopDrag()
+    if not dragging then
+        return
+    end
+
+    dragging.frame:SetAlpha(1)
+    dragging = nil
+    dragSide, dragIndex = nil, nil
+
+    if barFrame then
+        barFrame:SetScript("OnUpdate", nil)
+    end
+
+    saveLayout()
+    applyLayout()
+end
+
+function Bar:IsDragging()
+    return dragging ~= nil
 end
 
 --------------------------------------------------------------------------------
@@ -191,7 +437,16 @@ local function createModuleFrame(module)
     frame:SetHeight(ns.db.bar.height)
     frame:SetWidth(math.max(module.width, 1))
     frame:RegisterForClicks("AnyUp")
+    frame:RegisterForDrag("LeftButton")
     module.frame = frame
+
+    frame:SetScript("OnDragStart", function()
+        Bar:StartDrag(module)
+    end)
+
+    frame:SetScript("OnDragStop", function()
+        Bar:StopDrag()
+    end)
 
     if module.OnClick then
         frame:SetScript("OnClick", function(_, button)
@@ -237,10 +492,15 @@ function Bar:RegisterModule(definition)
     local side = definition.side or "LEFT"
     assert(VALID_SIDES[side], "invalid side: " .. tostring(side))
 
+    local order = definition.order or 100
+
     local module = setmetatable({
         name = name,
         side = side,
-        order = definition.order or 100,
+        order = order,
+        -- Kept so "bar reset" can put everything back where it started.
+        defaultSide = side,
+        defaultOrder = order,
         events = definition.events,
         interval = definition.interval,
         width = definition.width or 0,
@@ -256,8 +516,9 @@ function Bar:RegisterModule(definition)
     table.insert(modules, module)
     subscribe(module)
 
-    -- Modules registered after login still get built.
+    -- Modules registered after login still get built and placed.
     if initialized then
+        applySavedLayout()
         createModuleFrame(module)
         queueLayout()
     end
@@ -293,7 +554,7 @@ local function applyUIParentInset()
     end)
 
     if not ok then
-        ns.Print("Could not reserve space at the top of the screen. Use /forever bar push to turn this off.")
+        ns.Print("Could not reserve space at the top of the screen. Use /fp bar push to turn this off.")
     end
 
     return ok
@@ -378,6 +639,8 @@ function Bar:Initialize()
         dispatcher:RegisterEvent(event)
     end
 
+    applySavedLayout()
+
     for _, module in ipairs(modules) do
         createModuleFrame(module)
     end
@@ -389,7 +652,7 @@ end
 -- Commands
 --------------------------------------------------------------------------------
 
-ns.RegisterCommand("bar", "Toggle the top bar. Also: bar height <16-48>, bar push", function(rest)
+ns.RegisterCommand("bar", "Toggle the bar. Also: bar height <16-48>, bar push, bar lock, bar reset", function(rest)
     local argument, value = (rest or ""):match("^(%S*)%s*(.-)$")
     argument = argument:lower()
     local config = ns.db.bar
@@ -397,7 +660,7 @@ ns.RegisterCommand("bar", "Toggle the top bar. Also: bar height <16-48>, bar pus
     if argument == "height" then
         local height = tonumber(value)
         if not height then
-            ns.Print(string.format("Bar height is %d. Usage: /forever bar height <%d-%d>", config.height, MIN_HEIGHT, MAX_HEIGHT))
+            ns.Print(string.format("Bar height is %d. Usage: /fp bar height <%d-%d>", config.height, MIN_HEIGHT, MAX_HEIGHT))
             return
         end
 
@@ -409,6 +672,15 @@ ns.RegisterCommand("bar", "Toggle the top bar. Also: bar height <16-48>, bar pus
         config.pushUIDown = not config.pushUIDown
         Bar:Update()
         ns.Print(string.format("Pushing the UI down is now %s.", config.pushUIDown and "on" or "off"))
+    elseif argument == "lock" then
+        config.locked = not config.locked
+        ns.Print(string.format(
+            "Bar modules are %s.",
+            config.locked and "locked in place" or "draggable"
+        ))
+    elseif argument == "reset" then
+        resetLayout()
+        ns.Print("Module order reset.")
     elseif argument == "" then
         config.enabled = not config.enabled
         Bar:Update()

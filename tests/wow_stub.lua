@@ -15,6 +15,9 @@ local function makeWidget(kind, parent)
         height = 0,
         shown = true,
         text = "",
+        alpha = 1,
+        left = 0,
+        scale = 1,
     }
 
     function widget:SetPoint(...)
@@ -91,10 +94,26 @@ local function makeWidget(kind, parent)
     end
 
     function widget:RegisterForClicks() end
+    function widget:RegisterForDrag() end
     function widget:EnableMouse() end
     function widget:SetFrameStrata() end
     function widget:SetFrameLevel() end
-    function widget:SetAlpha() end
+
+    function widget:SetAlpha(value)
+        self.alpha = value
+    end
+
+    function widget:GetAlpha()
+        return self.alpha
+    end
+
+    function widget:GetLeft()
+        return self.left
+    end
+
+    function widget:GetEffectiveScale()
+        return self.scale
+    end
     function widget:SetJustifyH() end
     function widget:SetColorTexture() end
     function widget:SetTexture() end
@@ -120,9 +139,18 @@ local function makeWidget(kind, parent)
         return "Fonts\\FRIZQT__.TTF", 12, ""
     end
 
-    -- Deterministic fake metrics: 6 units per character.
+    -- Deterministic fake metrics: 6 units per rendered character, and each
+    -- inline texture escape counts as one icon rather than its markup length.
     function widget:GetStringWidth()
-        return #tostring(self.text) * 6
+        local text = tostring(self.text)
+
+        local icons = 0
+        for _ in text:gmatch("|T.-|t") do
+            icons = icons + 1
+        end
+
+        local rendered = text:gsub("|T.-|t", "")
+        return #rendered * 6 + icons * 12
     end
 
     function widget:CreateTexture()
@@ -170,6 +198,11 @@ function stub.newEnv()
             env[name] = frame
         end
         return frame
+    end
+
+    env.cursorX, env.cursorY = 0, 0
+    function env.GetCursorPosition()
+        return env.cursorX, env.cursorY
     end
 
     env.money = 0

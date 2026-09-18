@@ -13,6 +13,12 @@ Out of the box:
 The bar reserves its own strip of screen: it insets `UIParent` from the top, so
 top-anchored Blizzard frames move down with it instead of being covered.
 
+Modules are rearranged by dragging them along the bar. The bar reorders live
+while you hold one, so it is its own drag preview, and the layout is saved
+between sessions. Which third of the bar you drop in picks the side, so a
+module can move from the right group to the centre or left. `/fp bar lock`
+stops accidental drags and `/fp bar reset` puts everything back.
+
 ## Install
 
 1. Copy this folder into your client's `Interface/AddOns` as `ForeverPanel`,
@@ -31,6 +37,8 @@ interface version.
 - `/fp bar` - Show or hide the bar
 - `/fp bar height <16-48>` - Set the bar height
 - `/fp bar push` - Toggle reserving space (off = overlay the UI instead)
+- `/fp bar lock` - Stop modules being dragged
+- `/fp bar reset` - Restore the default module order
 - `/fp clock` - Toggle 12/24 hour time
 - `/fp clock blizzard` - Show or hide Blizzard's own clock
 - `/fp status` - Show launch and note counts
@@ -78,6 +86,9 @@ The bar gives every module a container `Button` at `module.frame`, plus:
 Layout rules: `LEFT` flows left-to-right from the left edge, `RIGHT` flows
 right-to-left from the right edge, and `CENTER` is laid out as one group
 centred on the bar. Hidden modules take their spacing with them.
+
+`side` and `order` here are only the defaults. Once a module has been dragged,
+the position saved in `ForeverPanelDB.bar.layout` wins, until `/fp bar reset`.
 
 ## Tests
 
