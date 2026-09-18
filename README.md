@@ -13,6 +13,13 @@ Out of the box:
 The bar reserves its own strip of screen: it insets `UIParent` from the top, so
 top-anchored Blizzard frames move down with it instead of being covered.
 
+Right-click anywhere on the bar for `Settings...` and `Reset module order`.
+
+The settings panel carries every option, including a switch per module to hide
+one without removing it, and two tweaks to Blizzard's own UI: hiding the
+gryphons either side of the action bar, and turning on the game's health and
+mana numbers on the unit frames.
+
 Modules are rearranged by dragging them along the bar. The bar reorders live
 while you hold one, so it is its own drag preview, and the layout is saved
 between sessions. Which third of the bar you drop in picks the side, so a
@@ -51,6 +58,7 @@ interface version.
 - `/fp bar push` - Toggle reserving space (off = overlay the UI instead)
 - `/fp bar lock` - Stop modules being dragged
 - `/fp bar reset` - Restore the default module order
+- `/fp settings` - Open the settings panel
 - `/fp bar debug` - Print the bar's screen rect and module widths
 - `/fp xp` - Toggle XP between counting up and counting down
 - `/fp clock` - Toggle 12/24 hour time
@@ -96,6 +104,26 @@ The bar gives every module a container `Button` at `module.frame`, plus:
 - `module:SetShown(shown)` - hide yourself; the bar closes the gap
 - `module:Refresh()` - re-run `OnUpdate`
 - `module:MarkDirty()` - request a re-layout
+
+To put your config on the settings panel, declare it next to the code that uses
+it — `Modules/Settings.lua` renders whatever has been registered, so it needs no
+edit:
+
+```lua
+ns.RegisterSetting({
+    store = "durability",   -- ns.db.durability.showPercent
+    key   = "showPercent",
+    type  = "checkbox",     -- checkbox | slider (slider takes min/max/step)
+    name  = "Show a percentage",
+    onChange = function() ns.Bar:GetModule("durability"):Refresh() end,
+})
+```
+
+Registering a setting with no matching `AddDefaults` entry is an error, since it
+would render a control that silently does nothing.
+
+Every module also gets a `Show <name>` checkbox on the panel automatically, so
+you do not declare that one yourself.
 
 Name your font string `module.text`. The bar uses it to colour your text (the
 bar owns that, so a module cannot make itself unreadable against the bar's

@@ -3,7 +3,7 @@
 ## Notes: A full-width top info bar with XP, clock and money modules.
 ## IconTexture: Interface\Icons\INV_Misc_PocketWatch_01
 ## Author: You
-## Version: 0.3.0
+## Version: 0.5.0
 ## SavedVariables: ForeverPanelDB, ForeverDB
 
 ForeverPanel.lua
@@ -11,3 +11,5 @@ Bar.lua
 Modules/Money.lua
 Modules/Clock.lua
 Modules/XP.lua
+Modules/UITweaks.lua
+Modules/Settings.lua

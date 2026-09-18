@@ -8,6 +8,8 @@ M.FILES = {
     "Modules/Money.lua",
     "Modules/Clock.lua",
     "Modules/XP.lua",
+    "Modules/UITweaks.lua",
+    "Modules/Settings.lua",
 }
 
 --- Load the addon's files into a stubbed environment, the way WoW would:

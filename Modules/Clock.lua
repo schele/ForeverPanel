@@ -7,6 +7,33 @@ ns.AddDefaults({
     },
 })
 
+ns.RegisterSetting({
+    store = "clock",
+    key = "use24Hour",
+    type = "checkbox",
+    -- Belongs to the clock block, so it sits indented under its Show switch.
+    parent = "modules.clock",
+    name = "24 hour clock",
+    onChange = function()
+        local module = ns.Bar:GetModule("clock")
+        if module then
+            module.lastText = nil
+            module:Refresh()
+        end
+    end,
+})
+
+ns.RegisterSetting({
+    store = "clock",
+    key = "hideBlizzardClock",
+    type = "checkbox",
+    section = "extras",
+    name = "Hide Blizzard's clock",
+    onChange = function()
+        ns.UpdateBlizzardClock()
+    end,
+})
+
 --- Format a wall-clock time. Pure, so it is unit tested directly.
 local function formatClock(hour, minute, use24Hour)
     hour = math.floor(tonumber(hour) or 0) % 24

@@ -20,6 +20,11 @@ local function loggedIn(options)
     end
 
     helpers.login(ns, env)
+
+    -- These tests are about dragging, not about whether it is allowed by
+    -- default, so say so rather than inherit whatever the default happens to be.
+    ns.db.bar.locked = false
+
     env.ForeverBar.width = BAR_WIDTH
     env.ForeverBar.left = 0
     return ns, env

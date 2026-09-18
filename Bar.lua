@@ -8,10 +8,43 @@ ns.AddDefaults({
         enabled = true,
         height = 24,
         pushUIDown = true,
-        locked = false,
+        locked = true,
         -- name -> { side, order }, written whenever a module is dragged.
         layout = {},
     },
+})
+
+ns.RegisterSetting({
+    store = "bar",
+    key = "pushUIDown",
+    type = "checkbox",
+    name = "Reserve space at the top",
+    tooltip = "Push Blizzard's frames down so the bar does not cover them.",
+    onChange = function()
+        ns.Bar:Update()
+    end,
+})
+
+-- Height sits with "reserve space": both are about how much room the bar takes.
+ns.RegisterSetting({
+    store = "bar",
+    key = "height",
+    type = "slider",
+    name = "Bar height",
+    min = 16,
+    max = 48,
+    onChange = function()
+        ns.Bar:Update()
+        ns.Bar:RefreshAll()
+    end,
+})
+
+ns.RegisterSetting({
+    store = "bar",
+    key = "locked",
+    type = "checkbox",
+    name = "Lock modules",
+    tooltip = "Stop modules being dragged along the bar.",
 })
 
 local VALID_SIDES = { LEFT = true, CENTER = true, RIGHT = true }
@@ -65,7 +98,10 @@ local function computeLayout(entries, options)
 
     local bySide = { LEFT = {}, CENTER = {}, RIGHT = {} }
     for _, entry in ipairs(entries) do
-        if entry.shown ~= false and VALID_SIDES[entry.side] then
+        -- Two separate reasons to be absent: the module has nothing to say
+        -- (xp at max level), or you turned it off. Either one closes the gap.
+        local visible = entry.shown ~= false and not entry.hiddenByUser
+        if visible and VALID_SIDES[entry.side] then
             table.insert(bySide[entry.side], entry)
         end
     end
@@ -462,11 +498,16 @@ local function createModuleFrame(module)
         Bar:StopDrag()
     end)
 
-    if module.OnClick then
-        frame:SetScript("OnClick", function(_, button)
+    -- Always wired, even for a module with no OnClick of its own: a module
+    -- covers part of the bar, so without this the right-click menu would be
+    -- unreachable wherever you happened to click on text.
+    frame:SetScript("OnClick", function(_, button)
+        if button == "RightButton" then
+            Bar:OpenMenu(frame)
+        elseif module.OnClick then
             module:OnClick(button)
-        end)
-    end
+        end
+    end)
 
     if module.OnEnter then
         frame:SetScript("OnEnter", function()
@@ -534,6 +575,19 @@ function Bar:RegisterModule(definition)
     table.insert(modules, module)
     subscribe(module)
 
+    -- Every module gets a visibility switch without having to ask for one, so
+    -- a new module is on the settings panel the moment it is registered.
+    ns.AddDefaults({ modules = { [name] = true } })
+    ns.RegisterSetting({
+        store = "modules",
+        key = name,
+        type = "checkbox",
+        name = "Show " .. (definition.label or name),
+        onChange = function()
+            Bar:ApplyModuleVisibility()
+        end,
+    })
+
     -- Modules registered after login still get built and placed.
     if initialized then
         applySavedLayout()
@@ -546,6 +600,20 @@ end
 
 function Bar:GetModule(name)
     return modulesByName[name]
+end
+
+--- Read each module's visibility switch out of the database and reflow.
+function Bar:ApplyModuleVisibility()
+    local stored = ns.db and ns.db.modules
+    if not stored then
+        return
+    end
+
+    for _, module in ipairs(modules) do
+        module.hiddenByUser = stored[module.name] == false
+    end
+
+    applyLayout()
 end
 
 function Bar:RefreshAll()
@@ -674,6 +742,31 @@ function Bar:Update()
 end
 
 --------------------------------------------------------------------------------
+-- Right-click menu
+--------------------------------------------------------------------------------
+
+--- Open the bar's context menu over a frame.
+-- Actions only. Toggles all live on the settings panel: a checkbox here would
+-- be a second place to keep them in step, and toggling one that re-anchors
+-- UIParent slid the open menu out from under the cursor.
+function Bar:OpenMenu(owner)
+    if dragging or not MenuUtil then
+        return
+    end
+
+    MenuUtil.CreateContextMenu(owner or barFrame, function(_, root)
+        root:CreateTitle("ForeverPanel")
+        root:CreateButton("Settings...", function()
+            ns.OpenSettings()
+        end)
+        root:CreateButton("Reset module order", function()
+            resetLayout()
+            ns.Print("Module order reset.")
+        end)
+    end)
+end
+
+--------------------------------------------------------------------------------
 -- Setup
 --------------------------------------------------------------------------------
 
@@ -708,6 +801,12 @@ function Bar:Initialize()
 
     barFrame = CreateFrame("Frame", "ForeverBar", UIParent)
     barFrame:SetFrameStrata("MEDIUM")
+    barFrame:EnableMouse(true)
+    barFrame:SetScript("OnMouseUp", function(self, button)
+        if button == "RightButton" then
+            Bar:OpenMenu(self)
+        end
+    end)
 
     local background = barFrame:CreateTexture(nil, "BACKGROUND")
     background:SetAllPoints()
@@ -745,6 +844,10 @@ function Bar:Initialize()
 
     applySavedLayout()
     installInsetHook()
+
+    for _, module in ipairs(modules) do
+        module.hiddenByUser = ns.db.modules[module.name] == false
+    end
 
     for _, module in ipairs(modules) do
         createModuleFrame(module)

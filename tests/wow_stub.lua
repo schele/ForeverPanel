@@ -58,16 +58,36 @@ local function makeWidget(kind, parent)
         self.width, self.height = w, h
     end
 
+    -- Showing and hiding fire their scripts, and only on a real transition,
+    -- the way the client does.
     function widget:Show()
+        if self.shown then
+            return
+        end
         self.shown = true
+        local handler = self.scripts.OnShow
+        if handler then
+            handler(self)
+        end
     end
 
     function widget:Hide()
+        if not self.shown then
+            return
+        end
         self.shown = false
+        local handler = self.scripts.OnHide
+        if handler then
+            handler(self)
+        end
     end
 
     function widget:SetShown(value)
-        self.shown = value and true or false
+        if value then
+            self:Show()
+        else
+            self:Hide()
+        end
     end
 
     function widget:IsShown()
@@ -80,6 +100,16 @@ local function makeWidget(kind, parent)
 
     function widget:GetScript(name)
         return self.scripts[name]
+    end
+
+    function widget:HookScript(name, fn)
+        local existing = self.scripts[name]
+        self.scripts[name] = function(...)
+            if existing then
+                existing(...)
+            end
+            fn(...)
+        end
     end
 
     function widget:RegisterEvent(event)
@@ -115,6 +145,29 @@ local function makeWidget(kind, parent)
     function widget:GetEffectiveScale()
         return self.scale
     end
+    function widget:SetChecked(value)
+        self.checked = value and true or false
+    end
+
+    function widget:GetChecked()
+        return self.checked
+    end
+
+    function widget:SetValue(value)
+        self.value = value
+    end
+
+    function widget:GetValue()
+        return self.value
+    end
+
+    function widget:SetMinMaxValues(low, high)
+        self.minValue, self.maxValue = low, high
+    end
+
+    function widget:SetValueStep() end
+    function widget:SetObeyStepOnDrag() end
+
     function widget:SetTextColor(r, g, b, a)
         self.textColor = { r, g, b, a or 1 }
     end
@@ -137,7 +190,9 @@ local function makeWidget(kind, parent)
         self.gradient = { orientation = orientation, from = from, to = to }
     end
     function widget:SetTexture() end
-    function widget:SetFont() end
+    function widget:SetFont(file, size, flags)
+        self.font = { file = file, size = size, flags = flags or "" }
+    end
 
     function widget:SetParent(value)
         self.parent = value
@@ -162,6 +217,10 @@ local function makeWidget(kind, parent)
     end
 
     function widget:GetFont()
+        local font = self.font
+        if font then
+            return font.file, font.size, font.flags
+        end
         return "Fonts\\FRIZQT__.TTF", 12, ""
     end
 
@@ -219,7 +278,44 @@ function stub.newEnv()
     env.UIParent = makeWidget("Frame")
     env.WorldFrame = makeWidget("Frame")
     env.TimeManagerClockButton = makeWidget("Button")
+    -- The gryphons, nested exactly as the live client reports them:
+    -- MainActionBar.EndCaps.LeftEndCap
+    env.MainActionBar = makeWidget("Frame")
+    env.MainActionBar.EndCaps = makeWidget("Frame")
+    env.MainActionBar.EndCaps.LeftEndCap = makeWidget("Frame")
+    env.MainActionBar.EndCaps.RightEndCap = makeWidget("Frame")
+    -- The font object every unit frame's health and mana text inherits from.
+    env.TextStatusBarText = makeWidget("FontString")
+    -- Both start closed, as they do in game, so Show() is a real transition
+    -- and fires OnShow.
+    env.SettingsPanel = makeWidget("Frame")
+    env.SettingsPanel.shown = false
+    env.GameMenuFrame = makeWidget("Frame")
+    env.GameMenuFrame.shown = false
     env.SlashCmdList = {}
+
+    env.MenuResponse = { Open = 1, Close = 2, CloseAll = 3, Refresh = 4 }
+
+    function env.HideUIPanel(frame)
+        if frame and frame.Hide then
+            frame:Hide()
+        end
+    end
+
+    -- In the client the addon environment *is* the global table, so code that
+    -- reaches a frame by name through _G finds the same frames as code that
+    -- names them directly.
+    env._G = env
+
+    env.__cvars = {}
+
+    function env.SetCVar(name, value)
+        env.__cvars[name] = tostring(value)
+    end
+
+    function env.GetCVar(name)
+        return env.__cvars[name]
+    end
 
     function env.CreateFrame(kind, name, parent)
         local frame = makeWidget(kind or "Frame", parent)
@@ -264,6 +360,77 @@ function stub.newEnv()
         local grouped = digits:reverse():gsub("(%d%d%d)", "%1,"):reverse()
         return (grouped:gsub("^,", ""))
     end
+
+    -- Records what a context menu was built from, so tests can read the entries
+    -- back and invoke them the way a click would.
+    local function makeMenuRoot()
+        local root = { entries = {} }
+
+        local function add(entry)
+            table.insert(root.entries, entry)
+            return entry
+        end
+
+        function root:CreateTitle(text)
+            return add({ kind = "title", text = text })
+        end
+
+        function root:CreateButton(text, callback)
+            return add({ kind = "button", text = text, callback = callback })
+        end
+
+        function root:CreateCheckbox(text, isSelected, setSelected)
+            return add({
+                kind = "checkbox",
+                text = text,
+                isSelected = isSelected,
+                setSelected = setSelected,
+            })
+        end
+
+        function root:CreateDivider()
+            return add({ kind = "divider" })
+        end
+
+        --- Find an entry by its label.
+        function root:Find(text)
+            for _, entry in ipairs(self.entries) do
+                if entry.text == text then
+                    return entry
+                end
+            end
+        end
+
+        return root
+    end
+
+    env.MenuUtil = {
+        CreateContextMenu = function(owner, generator)
+            local root = makeMenuRoot()
+            generator(owner, root)
+            env.__menu = root
+            env.__menuOwner = owner
+            return root
+        end,
+    }
+
+    env.Settings = {
+        RegisterCanvasLayoutCategory = function(frame, name)
+            return {
+                name = name,
+                frame = frame,
+                GetID = function()
+                    return "category-id"
+                end,
+            }
+        end,
+        RegisterAddOnCategory = function(category)
+            env.__settingsCategory = category
+        end,
+        OpenToCategory = function(id)
+            env.__openedCategory = id
+        end,
+    }
 
     function env.CreateColor(r, g, b, a)
         return { r = r, g = g, b = b, a = a }

@@ -8,6 +8,9 @@ ns.AddDefaults({
     },
 })
 
+-- Deliberately not on the settings panel: left-clicking the block toggles it,
+-- and /fp xp does the same, so a checkbox would be a third way to say it.
+
 --- Progress through the current level, as "xx.xx% XP" counting up or
 -- "xx.xx% left" counting down.
 -- Returns nil when there is no XP bar to describe (max level, or XP turned

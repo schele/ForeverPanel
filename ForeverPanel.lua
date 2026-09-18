@@ -34,6 +34,56 @@ function ns.AddDefaults(extra)
     applyDefaults(defaults, extra)
 end
 
+-- Settings registry. A module declares the config it owns, the same way it
+-- contributes defaults and slash commands, and Settings.lua renders whatever
+-- has been declared. Adding a module therefore needs no edit to Settings.lua.
+local settings = {}
+ns.settings = settings
+
+--- Declare a configurable value.
+-- store/key address it inside the database (ns.db[store][key]); type is
+-- "checkbox" or "slider"; onChange runs after a change so the owner can react.
+function ns.RegisterSetting(definition)
+    assert(type(definition) == "table", "RegisterSetting expects a table")
+
+    local store, key = definition.store, definition.key
+    assert(type(store) == "string" and store ~= "", "setting requires a store")
+    assert(type(key) == "string" and key ~= "", "setting requires a key")
+    assert(type(definition.name) == "string", "setting requires a name")
+    assert(
+        definition.type == "checkbox" or definition.type == "slider",
+        "setting type must be checkbox or slider"
+    )
+
+    -- A setting with no default would read nil and write somewhere nothing
+    -- else looks at, which shows up as a control that silently does nothing.
+    assert(
+        defaults[store] ~= nil and defaults[store][key] ~= nil,
+        string.format("no default registered for %s.%s", store, key)
+    )
+
+    table.insert(settings, definition)
+    return definition
+end
+
+--- Current value of a setting, straight from the database.
+function ns.SettingValue(setting)
+    local store = ns.db and ns.db[setting.store]
+    return store and store[setting.key]
+end
+
+function ns.SetSettingValue(setting, value)
+    local store = ns.db and ns.db[setting.store]
+    if not store or store[setting.key] == value then
+        return
+    end
+
+    store[setting.key] = value
+    if setting.onChange then
+        setting.onChange(value)
+    end
+end
+
 function ns.Print(message)
     print(string.format("%s %s", ns.PREFIX, message))
 end
