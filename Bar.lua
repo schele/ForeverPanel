@@ -835,10 +835,34 @@ ns.RegisterCommand("bar", "Toggle the bar. Also: bar height <16-48>, bar push, b
 
         for _, module in ipairs(modules) do
             ns.Print(string.format(
-                "  %s: side=%s width=%d shown=%s frameWidth=%s left=%s",
-                module.name, module.side, module.width or -1, tostring(module.shown),
+                "  %s: side=%s order=%d width=%d shown=%s frameWidth=%s left=%s",
+                module.name, module.side, module.order or -1, module.width or -1,
+                tostring(module.shown),
                 edge(module.frame, "GetWidth"), edge(module.frame, "GetLeft")
             ))
+        end
+
+        -- Is the saved layout coming back at all, and does it reach the modules?
+        ns.Print(string.format(
+            "db: launches=%s sameTable=%s",
+            tostring(ns.db.launches), tostring(ns.db == ForeverPanelDB)
+        ))
+
+        local layout = ns.db.bar.layout
+        if type(layout) ~= "table" then
+            ns.Print(string.format("saved layout: %s (not a table)", type(layout)))
+        else
+            local empty = true
+            for name, entry in pairs(layout) do
+                empty = false
+                ns.Print(string.format(
+                    "  saved %s: side=%s order=%s",
+                    name, tostring(entry and entry.side), tostring(entry and entry.order)
+                ))
+            end
+            if empty then
+                ns.Print("saved layout: empty")
+            end
         end
     elseif argument == "" then
         config.enabled = not config.enabled
