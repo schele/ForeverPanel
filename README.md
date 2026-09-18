@@ -6,7 +6,7 @@ Out of the box:
 
 | Side | Module | Shows |
 |---|---|---|
-| Left | `xp` | `xx.xx% left` until the next level, hidden at max level or with XP turned off |
+| Left | `xp` | `xx.xx% XP` through the current level, click to count down to the next one instead; hidden at max level or with XP turned off |
 | Centre | `clock` | Local time, click to toggle 12/24 hour |
 | Right | `money` | Gold, silver and copper with the in-game coin icons |
 
@@ -25,6 +25,18 @@ stops accidental drags and `/fp bar reset` puts everything back.
    so the result is `.../Interface/AddOns/ForeverPanel/ForeverPanel.toc`.
 2. Restart the client and enable ForeverPanel from the AddOns list.
 
+`package.ps1` does step 1 for you. It reads the file list out of the .toc and
+writes `dist/ForeverPanel-<version>.zip`, containing a single top-level
+`ForeverPanel/` folder:
+
+    ./package.ps1
+
+Add `-Install` to also copy the addon straight into the client. The default
+target is the Classic beta; `-WowPath` picks another one:
+
+    ./package.ps1 -Install
+    ./package.ps1 -Install -WowPath "C:\Program Files (x86)\World of Warcraft\_retail_"
+
 Built against Classic Era 1.15.x (`11509`) and the 1.60.x Classic beta
 (`16001`). For retail, change `## Interface` in the .toc to the current retail
 interface version.
@@ -39,6 +51,8 @@ interface version.
 - `/fp bar push` - Toggle reserving space (off = overlay the UI instead)
 - `/fp bar lock` - Stop modules being dragged
 - `/fp bar reset` - Restore the default module order
+- `/fp bar debug` - Print the bar's screen rect and module widths
+- `/fp xp` - Toggle XP between counting up and counting down
 - `/fp clock` - Toggle 12/24 hour time
 - `/fp clock blizzard` - Show or hide Blizzard's own clock
 - `/fp status` - Show launch and note counts
@@ -82,6 +96,11 @@ The bar gives every module a container `Button` at `module.frame`, plus:
 - `module:SetShown(shown)` - hide yourself; the bar closes the gap
 - `module:Refresh()` - re-run `OnUpdate`
 - `module:MarkDirty()` - request a re-layout
+
+Name your font string `module.text`. The bar uses it to colour your text (the
+bar owns that, so a module cannot make itself unreadable against the bar's
+background) and to re-measure you after the first frame, which is the only point
+at which the client can measure text at all.
 
 Layout rules: `LEFT` flows left-to-right from the left edge, `RIGHT` flows
 right-to-left from the right edge, and `CENTER` is laid out as one group

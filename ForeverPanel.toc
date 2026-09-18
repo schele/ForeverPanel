@@ -1,8 +1,9 @@
 ## Interface: 11509, 16001
 ## Title: ForeverPanel
 ## Notes: A full-width top info bar with XP, clock and money modules.
+## IconTexture: Interface\Icons\INV_Misc_PocketWatch_01
 ## Author: You
-## Version: 0.2.0
+## Version: 0.3.0
 ## SavedVariables: ForeverPanelDB, ForeverDB
 
 ForeverPanel.lua

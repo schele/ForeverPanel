@@ -16,6 +16,7 @@ local function makeWidget(kind, parent)
         shown = true,
         text = "",
         alpha = 1,
+        metricsReady = false,
         left = 0,
         scale = 1,
     }
@@ -114,8 +115,27 @@ local function makeWidget(kind, parent)
     function widget:GetEffectiveScale()
         return self.scale
     end
+    function widget:SetTextColor(r, g, b, a)
+        self.textColor = { r, g, b, a or 1 }
+    end
+
+    function widget:GetTextColor()
+        local color = self.textColor
+        if not color then
+            return nil
+        end
+        return color[1], color[2], color[3], color[4]
+    end
+
     function widget:SetJustifyH() end
-    function widget:SetColorTexture() end
+    function widget:SetColorTexture(r, g, b, a)
+        self.colorTexture = { r, g, b, a }
+        self.gradient = nil
+    end
+
+    function widget:SetGradient(orientation, from, to)
+        self.gradient = { orientation = orientation, from = from, to = to }
+    end
     function widget:SetTexture() end
     function widget:SetFont() end
 
@@ -128,7 +148,13 @@ local function makeWidget(kind, parent)
     end
 
     function widget:SetText(value)
-        self.text = value or ""
+        value = value or ""
+        if value ~= self.text then
+            self.text = value
+            -- The real client cannot measure text until it has been laid out,
+            -- which happens on the next frame, not in this call.
+            self.metricsReady = false
+        end
     end
 
     function widget:GetText()
@@ -141,7 +167,12 @@ local function makeWidget(kind, parent)
 
     -- Deterministic fake metrics: 6 units per rendered character, and each
     -- inline texture escape counts as one icon rather than its markup length.
+    -- Returns 0 until the text has been through a render pass, like the client.
     function widget:GetStringWidth()
+        if not self.metricsReady then
+            return 0
+        end
+
         local text = tostring(self.text)
 
         local icons = 0
@@ -234,6 +265,10 @@ function stub.newEnv()
         return (grouped:gsub("^,", ""))
     end
 
+    function env.CreateColor(r, g, b, a)
+        return { r = r, g = g, b = b, a = a }
+    end
+
     env.date = os.date
 
     env.C_Timer = {
@@ -256,10 +291,39 @@ function stub.newEnv()
         end
     end
 
+    -- Test helper: simulate the render pass that makes text measurable.
+    function env.__render()
+        local seen = {}
+
+        local function mark(widget)
+            if seen[widget] then
+                return
+            end
+            seen[widget] = true
+            widget.metricsReady = true
+            for _, child in ipairs(widget.children) do
+                mark(child)
+            end
+        end
+
+        mark(env.UIParent)
+        for _, frame in ipairs(env.__frames) do
+            mark(frame)
+        end
+    end
+
     -- Test helpers.
+    -- A timer queued during one frame does not fire until the next one, and the
+    -- client draws in between, so anything queued can rely on text being
+    -- measurable by the time it runs.
     function env.__runTimers()
         local pending = env.__timers
         env.__timers = {}
+        if #pending == 0 then
+            return
+        end
+
+        env.__render()
         for _, fn in ipairs(pending) do
             fn()
         end

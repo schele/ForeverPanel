@@ -115,14 +115,61 @@ describe("the bar at login", function()
         assertEqual(-24, y, "UIParent is pushed down by the bar height")
     end)
 
-    it("anchors the bar into the strip above UIParent", function()
+    -- UIParent's top edge is wherever the inset put it, and Blizzard re-anchors
+    -- UIParent at times of its own choosing. A bar hung off that edge sits above
+    -- the top of the screen whenever the inset is not in force, which is
+    -- invisible rather than merely misplaced. The bar belongs to the screen.
+    it("anchors the bar to the screen, not to UIParent's movable top edge", function()
         local ns, env = helpers.loadAddon()
         helpers.login(ns, env)
 
-        local point, relativeTo, relativePoint = env.ForeverBar:GetPoint(1)
-        assertEqual("BOTTOMLEFT", point)
-        assertEqual(env.UIParent, relativeTo)
+        local point, relativeTo, relativePoint, _, y = env.ForeverBar:GetPoint(1)
+        assertEqual("TOPLEFT", point)
+        assertEqual(env.WorldFrame, relativeTo, "anchored to the screen")
         assertEqual("TOPLEFT", relativePoint)
+        assertEqual(0, y, "flush with the top of the screen")
+    end)
+
+    it("stays on screen when the UIParent inset does not take", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        -- Blizzard putting UIParent back at full screen height.
+        env.UIParent:ClearAllPoints()
+        ns.Bar:Update()
+
+        local point, relativeTo = env.ForeverBar:GetPoint(1)
+        assertEqual("TOPLEFT", point, "still pinned to the top of the screen")
+        assertEqual(env.WorldFrame, relativeTo, "the bar does not follow UIParent")
+        assertTrue(env.ForeverBar:IsShown(), "and is still shown")
+    end)
+
+    -- The inset call itself succeeds, and then UIParent is back at full height
+    -- by the time anything looks: Blizzard re-anchors it after login. Watch for
+    -- that instead of trying to guess the one moment it happens.
+    it("puts the inset back when something else re-anchors UIParent", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+        helpers.firstFrame(env)
+
+        env.UIParent:ClearAllPoints()
+        env.UIParent:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, 0)
+        env.__runTimers()
+
+        local point, _, _, _, y = env.UIParent:GetPoint(1)
+        assertEqual("TOPLEFT", point)
+        assertEqual(-24, y, "the inset is back")
+    end)
+
+    it("does not fight itself while applying the inset", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+        helpers.firstFrame(env)
+
+        -- Re-applying must not queue another re-apply off its own SetPoint
+        -- calls, or the bar spends every frame re-anchoring UIParent.
+        ns.Bar.ApplyUIParentInset()
+        assertEqual(0, #env.__timers, "no re-apply queued by our own call")
     end)
 
     it("releases the reserved space when pushing is turned off", function()
@@ -192,10 +239,112 @@ describe("money module", function()
     it("sits on the right of the bar", function()
         local ns, env = helpers.loadAddon()
         helpers.login(ns, env)
+        helpers.firstFrame(env)
 
         local module = ns.Bar:GetModule("money")
         assertEqual("RIGHT", module.frame:GetPoint(1))
         assertTrue(module.width > 0, "the module reports a width for layout")
+    end)
+end)
+
+describe("the bar's backdrop", function()
+    it("is a vertical gradient, dark at the bottom", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        local gradient = env.ForeverBar.background.gradient
+        assertTrue(gradient ~= nil, "the backdrop is a gradient, not a flat fill")
+        assertEqual("VERTICAL", gradient.orientation)
+        assertTrue(gradient.from.r < gradient.to.r, "the bottom is darker than the top")
+    end)
+
+    it("falls back to a flat fill on a client without SetGradient", function()
+        local ns = helpers.loadAddon()
+
+        local texture = {
+            SetColorTexture = function(self, r, g, b, a)
+                self.fill = { r, g, b, a }
+            end,
+        }
+
+        assertEqual(false, ns.Bar.PaintBackground(texture), "the gradient call failed")
+        assertTrue(texture.fill ~= nil, "it still got a colour")
+        assertTrue(texture.fill[1] < 0.2, "and it is the dark end, not white")
+    end)
+end)
+
+describe("the bar's edge", function()
+    it("runs along the bottom, full width, at a fixed thickness", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        local border = env.ForeverBar.border
+        assertTrue(border ~= nil, "the bar has a border texture")
+        assertEqual("BOTTOMLEFT", border:GetPoint(1))
+        assertEqual(2, border:GetHeight(), "stays thin whatever the bar height")
+
+        -- A taller bar must not thicken the edge with it.
+        helpers.command(env, "bar height 48")
+        assertEqual(2, border:GetHeight())
+    end)
+end)
+
+describe("module text colour", function()
+    -- The bar owns this, not the modules: GameFontNormal is WoW gold, which is
+    -- also the bar's background, so a module left to its own devices renders
+    -- invisible text. Doing it centrally means a new module cannot get it wrong.
+    it("colours every module's text, including one registered after login", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        ns.Bar:RegisterModule({
+            name = "latecomer",
+            OnCreate = function(module)
+                module.text = module.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            end,
+            OnUpdate = function() end,
+        })
+
+        for _, name in ipairs({ "money", "clock", "xp", "latecomer" }) do
+            local r, g, b = ns.Bar:GetModule(name).text:GetTextColor()
+            assertEqual(1, r, name .. " red")
+            assertEqual(1, g, name .. " green")
+            assertEqual(1, b, name .. " blue")
+        end
+    end)
+end)
+
+describe("the first frame after login", function()
+    -- The client cannot measure a font string until it has been laid out, so
+    -- every module measures 0 during login. The bar has to re-measure once the
+    -- first frame has been drawn, or it keeps the zero widths and the modules
+    -- pile up instead of spreading across the bar.
+    it("measures every module once the text has been laid out", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+        helpers.firstFrame(env)
+
+        for _, name in ipairs({ "money", "clock" }) do
+            local module = ns.Bar:GetModule(name)
+            assertTrue(module.width > 0, name .. " is measured after the first frame")
+            -- Zero-width modules collapse to the 1px minimum, which is what
+            -- leaves their text piled up at the anchor instead of laid out.
+            assertTrue(module.frame:GetWidth() > 1, name .. " is wider than the placeholder")
+        end
+    end)
+
+    it("re-measures without waiting for an unrelated event", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+        helpers.firstFrame(env)
+
+        local money = ns.Bar:GetModule("money")
+        local measured = money.width
+
+        -- Nothing about the player's money changed; the width came from the
+        -- re-measure alone, not from a PLAYER_MONEY refresh happening to land.
+        helpers.fire(env, "PLAYER_MONEY")
+        assertEqual(measured, money.width, "the login measurement already matched")
     end)
 end)
 
@@ -272,15 +421,62 @@ describe("clock module", function()
 end)
 
 describe("xp module", function()
-    it("shows the remaining percentage on the left", function()
+    it("counts the earned percentage up by default, on the left", function()
         local ns, env = helpers.loadAddon()
         env.xp, env.xpMax = 250, 1000
         helpers.login(ns, env)
 
         local module = ns.Bar:GetModule("xp")
-        assertEqual("75.00% left", module.text:GetText())
+        assertEqual("25.00% XP", module.text:GetText())
         assertEqual("LEFT", module.frame:GetPoint(1))
         assertTrue(module.shown)
+    end)
+
+    it("toggles between counting up and counting down on click", function()
+        local ns, env = helpers.loadAddon()
+        env.xp, env.xpMax = 250, 1000
+        helpers.login(ns, env)
+
+        local module = ns.Bar:GetModule("xp")
+        local click = module.frame:GetScript("OnClick")
+
+        click(module.frame, "LeftButton")
+        assertEqual("75.00% left", module.text:GetText(), "counts down after one click")
+
+        click(module.frame, "LeftButton")
+        assertEqual("25.00% XP", module.text:GetText(), "and back up after another")
+    end)
+
+    it("remembers the direction across a login", function()
+        local first, firstEnv = helpers.loadAddon()
+        firstEnv.xp, firstEnv.xpMax = 250, 1000
+        helpers.login(first, firstEnv)
+
+        local module = first.Bar:GetModule("xp")
+        module.frame:GetScript("OnClick")(module.frame, "LeftButton")
+
+        local second, secondEnv = helpers.loadAddon()
+        secondEnv.ForeverPanelDB = firstEnv.ForeverPanelDB
+        secondEnv.xp, secondEnv.xpMax = 250, 1000
+        helpers.login(second, secondEnv)
+
+        assertEqual("75.00% left", second.Bar:GetModule("xp").text:GetText())
+    end)
+
+    it("re-measures when the direction changes", function()
+        local ns, env = helpers.loadAddon()
+        env.xp, env.xpMax = 250, 1000
+        helpers.login(ns, env)
+        helpers.firstFrame(env)
+
+        local module = ns.Bar:GetModule("xp")
+        local before = module.width
+        module.frame:GetScript("OnClick")(module.frame, "LeftButton")
+        env.__runTimers()
+
+        -- "75.00% left" and "25.00% XP" are different lengths, so a stale width
+        -- would leave the neighbouring modules overlapping it.
+        assertTrue(module.width ~= before, "the width follows the new text")
     end)
 
     it("updates on PLAYER_XP_UPDATE", function()
@@ -291,7 +487,7 @@ describe("xp module", function()
         env.xp = 900
         helpers.fire(env, "PLAYER_XP_UPDATE")
 
-        assertEqual("10.00% left", ns.Bar:GetModule("xp").text:GetText())
+        assertEqual("90.00% XP", ns.Bar:GetModule("xp").text:GetText())
     end)
 
     it("hides itself at max level", function()

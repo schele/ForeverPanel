@@ -1,9 +1,18 @@
 local addonName, ns = ...
 
---- Percentage of the current level still to go, as "xx.xx% left".
+ns.AddDefaults({
+    xp = {
+        -- Counting up is the default: "how far am I" reads more naturally than
+        -- "how far is left" for most people.
+        countDown = false,
+    },
+})
+
+--- Progress through the current level, as "xx.xx% XP" counting up or
+-- "xx.xx% left" counting down.
 -- Returns nil when there is no XP bar to describe (max level, or XP turned
 -- off), which tells the module to hide itself.
-local function formatXPRemaining(xp, xpMax)
+local function formatXP(xp, xpMax, countDown)
     xp = tonumber(xp) or 0
     xpMax = tonumber(xpMax) or 0
 
@@ -11,11 +20,16 @@ local function formatXPRemaining(xp, xpMax)
         return nil
     end
 
-    local remaining = math.max(0, xpMax - xp)
-    return string.format("%.2f%% left", remaining / xpMax * 100)
+    local earned = math.min(xpMax, math.max(0, xp))
+
+    if countDown then
+        return string.format("%.2f%% left", (xpMax - earned) / xpMax * 100)
+    end
+
+    return string.format("%.2f%% XP", earned / xpMax * 100)
 end
 
-ns.FormatXPRemaining = formatXPRemaining
+ns.FormatXP = formatXP
 
 ns.Bar:RegisterModule({
     name = "xp",
@@ -36,7 +50,9 @@ ns.Bar:RegisterModule({
 
     OnUpdate = function(module)
         local disabled = IsXPUserDisabled and IsXPUserDisabled()
-        local text = not disabled and formatXPRemaining(UnitXP("player"), UnitXPMax("player")) or nil
+        local text = not disabled
+            and formatXP(UnitXP("player"), UnitXPMax("player"), ns.db.xp.countDown)
+            or nil
 
         if not text then
             module:SetShown(false)
@@ -47,4 +63,25 @@ ns.Bar:RegisterModule({
         module:SetWidth(module.text:GetStringWidth())
         module:SetShown(true)
     end,
+
+    OnClick = function(module, button)
+        if button == "LeftButton" then
+            ns.db.xp.countDown = not ns.db.xp.countDown
+            module:Refresh()
+        end
+    end,
 })
+
+ns.RegisterCommand("xp", "Toggle the XP block between counting up and counting down", function()
+    ns.db.xp.countDown = not ns.db.xp.countDown
+
+    local module = ns.Bar:GetModule("xp")
+    if module then
+        module:Refresh()
+    end
+
+    ns.Print(string.format(
+        "XP now counts %s.",
+        ns.db.xp.countDown and "down to the next level" or "up from the last one"
+    ))
+end)

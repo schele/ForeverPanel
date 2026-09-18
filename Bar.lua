@@ -19,6 +19,19 @@ local EDGE_PADDING = 10
 local MODULE_SPACING = 16
 local MIN_HEIGHT, MAX_HEIGHT = 16, 48
 local DRAG_ALPHA = 0.6
+-- Sampled off a Titan Panel screenshot. The bar is not one flat colour: it runs
+-- from #3A3028 at the top down to #1D0E09 at the bottom, and it is the gradient
+-- that makes it read as a lit surface. Averaging the two into the midpoint
+-- (#372F21) gives a flat brown slab that looks nothing like the original.
+local BACKGROUND_TOP = { r = 0.227, g = 0.188, b = 0.157 }
+local BACKGROUND_BOTTOM = { r = 0.114, g = 0.055, b = 0.035 }
+-- The gold edge along the bottom, from the same screenshot: #715C3C. It is what
+-- separates the bar from the game world underneath it.
+local BORDER_COLOR = { r = 0.443, g = 0.361, b = 0.235 }
+local BORDER_HEIGHT = 2
+-- The bar owns the text colour rather than leaving it to each module, so a new
+-- module cannot render itself unreadable by leaving GameFontNormal alone.
+local TEXT_COLOR = { r = 1, g = 1, b = 1 }
 
 local modules = {}
 local modulesByName = {}
@@ -26,6 +39,7 @@ local eventMap = {}
 local barFrame, dispatcher
 local initialized = false
 local layoutQueued = false
+local applyingInset, insetReapplyQueued, insetHookInstalled = false, false, false
 local dragging, dragSide, dragIndex
 
 local function byOrder(a, b)
@@ -470,6 +484,10 @@ local function createModuleFrame(module)
         module:OnCreate()
     end
 
+    if module.text and module.text.SetTextColor then
+        module.text:SetTextColor(TEXT_COLOR.r, TEXT_COLOR.g, TEXT_COLOR.b)
+    end
+
     if module.interval then
         module.ticker = C_Timer.NewTicker(module.interval, function()
             module:Refresh()
@@ -536,6 +554,22 @@ function Bar:RefreshAll()
     end
 end
 
+--- Re-measure every module from its font string.
+-- A module takes its width when it sets its text, but the client cannot measure
+-- a font string until it has been laid out, so a width taken during login is
+-- always 0. Only the bar knows that first measurement happened before the first
+-- frame, so the bar re-takes it here: a module that skips work when its text has
+-- not changed (the clock does, so a 1 second ticker does not dirty the layout)
+-- would otherwise never measure itself again.
+local function remeasureModules()
+    for _, module in ipairs(modules) do
+        local text = module.text
+        if text and text.GetStringWidth then
+            module:SetWidth(text:GetStringWidth())
+        end
+    end
+end
+
 --------------------------------------------------------------------------------
 -- Screen space
 --------------------------------------------------------------------------------
@@ -547,11 +581,23 @@ local function applyUIParentInset()
     local config = ns.db.bar
     local inset = (config.enabled and config.pushUIDown) and config.height or 0
 
-    local ok = pcall(function()
+    applyingInset = true
+    local ok, err = pcall(function()
         UIParent:ClearAllPoints()
         UIParent:SetPoint("TOPLEFT", nil, "TOPLEFT", 0, -inset)
         UIParent:SetPoint("BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0)
     end)
+    applyingInset = false
+
+    -- Kept for "bar debug": whether the call threw, and what it actually
+    -- achieved. Reading the edge straight back distinguishes a call that failed
+    -- from one that succeeded and was undone again afterwards.
+    Bar.lastInset = {
+        wanted = inset,
+        ok = ok,
+        err = ok and nil or tostring(err),
+        topAfter = UIParent.GetTop and UIParent:GetTop() or nil,
+    }
 
     if not ok then
         ns.Print("Could not reserve space at the top of the screen. Use /fp bar push to turn this off.")
@@ -562,6 +608,33 @@ end
 
 Bar.ApplyUIParentInset = applyUIParentInset
 
+--- Keep the inset in force.
+-- Blizzard re-anchors UIParent back to the full screen after login: the call
+-- above succeeds and UIParent really is inset, then it is back at full height by
+-- the time anything looks at it. Rather than guess which event that is, watch
+-- UIParent for anyone else re-anchoring it and put the inset back afterwards.
+-- Our own SetPoint calls are ignored, so this cannot feed itself.
+local function installInsetHook()
+    if insetHookInstalled or not UIParent or not hooksecurefunc then
+        return
+    end
+    insetHookInstalled = true
+
+    local function reapply()
+        if applyingInset or insetReapplyQueued then
+            return
+        end
+        insetReapplyQueued = true
+        C_Timer.After(0, function()
+            insetReapplyQueued = false
+            applyUIParentInset()
+        end)
+    end
+
+    hooksecurefunc(UIParent, "SetPoint", reapply)
+    hooksecurefunc(UIParent, "SetAllPoints", reapply)
+end
+
 local function anchorBar()
     if not barFrame then
         return
@@ -570,14 +643,15 @@ local function anchorBar()
     local config = ns.db.bar
     barFrame:ClearAllPoints()
 
-    if config.pushUIDown then
-        -- Sit in the strip that applyUIParentInset just freed up.
-        barFrame:SetPoint("BOTTOMLEFT", UIParent, "TOPLEFT", 0, 0)
-        barFrame:SetPoint("BOTTOMRIGHT", UIParent, "TOPRIGHT", 0, 0)
-    else
-        barFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
-        barFrame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", 0, 0)
-    end
+    -- Always the top of the screen, never UIParent's top edge. UIParent's top is
+    -- wherever applyUIParentInset last managed to put it, and Blizzard re-anchors
+    -- UIParent at times of its own choosing; a bar anchored above that edge ends
+    -- up off the top of the screen, invisible, the moment the inset is not in
+    -- force. WorldFrame always covers the screen, so pushUIDown now only decides
+    -- whether Blizzard's frames move out from under the bar, not whether the bar
+    -- can be seen at all.
+    barFrame:SetPoint("TOPLEFT", WorldFrame, "TOPLEFT", 0, 0)
+    barFrame:SetPoint("TOPRIGHT", WorldFrame, "TOPRIGHT", 0, 0)
 
     barFrame:SetHeight(config.height)
 
@@ -603,6 +677,29 @@ end
 -- Setup
 --------------------------------------------------------------------------------
 
+--- Paint the bar's backdrop as a vertical gradient.
+-- SetGradient takes colour objects from 10.0 onwards and raw numbers before
+-- that, and the Classic clients did not all move at once, so a client that
+-- wants the old form gets the dark end as a flat fill rather than an error.
+local function paintBackground(texture)
+    local ok = pcall(function()
+        texture:SetColorTexture(1, 1, 1, 1)
+        texture:SetGradient(
+            "VERTICAL",
+            CreateColor(BACKGROUND_BOTTOM.r, BACKGROUND_BOTTOM.g, BACKGROUND_BOTTOM.b, 1),
+            CreateColor(BACKGROUND_TOP.r, BACKGROUND_TOP.g, BACKGROUND_TOP.b, 1)
+        )
+    end)
+
+    if not ok then
+        texture:SetColorTexture(BACKGROUND_BOTTOM.r, BACKGROUND_BOTTOM.g, BACKGROUND_BOTTOM.b, 1)
+    end
+
+    return ok
+end
+
+Bar.PaintBackground = paintBackground
+
 function Bar:Initialize()
     if initialized then
         return
@@ -614,8 +711,15 @@ function Bar:Initialize()
 
     local background = barFrame:CreateTexture(nil, "BACKGROUND")
     background:SetAllPoints()
-    background:SetColorTexture(0, 0, 0, 0.8)
+    paintBackground(background)
     barFrame.background = background
+
+    local border = barFrame:CreateTexture(nil, "BORDER")
+    border:SetPoint("BOTTOMLEFT")
+    border:SetPoint("BOTTOMRIGHT")
+    border:SetHeight(BORDER_HEIGHT)
+    border:SetColorTexture(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 1)
+    barFrame.border = border
 
     self.frame = barFrame
 
@@ -640,19 +744,31 @@ function Bar:Initialize()
     end
 
     applySavedLayout()
+    installInsetHook()
 
     for _, module in ipairs(modules) do
         createModuleFrame(module)
     end
 
     self:Update()
+
+    -- A font string cannot be measured until the client has laid it out, which
+    -- does not happen until the frame after the text is set. Everything built
+    -- above therefore measured 0 wide. Re-measure once the first frame has been
+    -- drawn, otherwise the modules keep those zero widths and sit stacked on
+    -- top of each other until some unrelated event happens to resize them.
+    C_Timer.After(0, function()
+        Bar:RefreshAll()
+        remeasureModules()
+        applyLayout()
+    end)
 end
 
 --------------------------------------------------------------------------------
 -- Commands
 --------------------------------------------------------------------------------
 
-ns.RegisterCommand("bar", "Toggle the bar. Also: bar height <16-48>, bar push, bar lock, bar reset", function(rest)
+ns.RegisterCommand("bar", "Toggle the bar. Also: bar height <16-48>, bar push, bar lock, bar reset, bar debug", function(rest)
     local argument, value = (rest or ""):match("^(%S*)%s*(.-)$")
     argument = argument:lower()
     local config = ns.db.bar
@@ -681,6 +797,49 @@ ns.RegisterCommand("bar", "Toggle the bar. Also: bar height <16-48>, bar push, b
     elseif argument == "reset" then
         resetLayout()
         ns.Print("Module order reset.")
+    elseif argument == "debug" then
+        local function edge(frame, method)
+            if not frame or not frame[method] then
+                return "?"
+            end
+            local value = frame[method](frame)
+            return value and string.format("%.0f", value) or "nil"
+        end
+
+        ns.Print(string.format(
+            "config: enabled=%s push=%s height=%d",
+            tostring(config.enabled), tostring(config.pushUIDown), config.height
+        ))
+        ns.Print(string.format(
+            "UIParent: top=%s bottom=%s height=%s",
+            edge(UIParent, "GetTop"), edge(UIParent, "GetBottom"), edge(UIParent, "GetHeight")
+        ))
+        ns.Print(string.format(
+            "bar: shown=%s top=%s bottom=%s width=%s alpha=%s",
+            barFrame and tostring(barFrame:IsShown()) or "no frame",
+            edge(barFrame, "GetTop"), edge(barFrame, "GetBottom"),
+            edge(barFrame, "GetWidth"), edge(barFrame, "GetAlpha")
+        ))
+        ns.Print(string.format("screen height: %s", edge(WorldFrame, "GetHeight")))
+
+        local last = Bar.lastInset
+        if last then
+            ns.Print(string.format(
+                "inset: wanted=%d call=%s topAfter=%s%s",
+                last.wanted,
+                last.ok and "ok" or "threw",
+                last.topAfter and string.format("%.0f", last.topAfter) or "nil",
+                last.err and (" err=" .. last.err) or ""
+            ))
+        end
+
+        for _, module in ipairs(modules) do
+            ns.Print(string.format(
+                "  %s: side=%s width=%d shown=%s frameWidth=%s left=%s",
+                module.name, module.side, module.width or -1, tostring(module.shown),
+                edge(module.frame, "GetWidth"), edge(module.frame, "GetLeft")
+            ))
+        end
     elseif argument == "" then
         config.enabled = not config.enabled
         Bar:Update()

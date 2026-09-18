@@ -46,6 +46,14 @@ function M.login(ns, env)
     M.fire(env, "PLAYER_LOGIN")
 end
 
+--- Draw the first frame, then run the timers that fall due on the next one.
+-- Text set during login only becomes measurable once it has been rendered.
+function M.firstFrame(env)
+    env.__render()
+    env.__runTimers()
+    env.__runTimers()
+end
+
 --- Strip inline texture escapes so text is easy to compare.
 function M.plain(text)
     return (tostring(text):gsub("|T.-|t", ""))
