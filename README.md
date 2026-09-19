@@ -5,6 +5,7 @@ World of Warcraft addons, one folder each.
 | Addon | What it is |
 |---|---|
 | [ForeverPanel](ForeverPanel/) | A full-width bar across the top of the screen showing XP, money, bag space and the time |
+| [UrlCopy](UrlCopy/) | Makes URLs spoken in chat clickable, and opens the one you click in a box you can copy from |
 
 ## Layout
 
