@@ -3,6 +3,11 @@ local helpers = require("helpers")
 local function loggedIn()
     local ns, env = helpers.loadAddon()
     helpers.login(ns, env)
+
+    -- The panel builds itself the first time it is opened, so say so rather
+    -- than expecting controls to exist from login.
+    ns.Settings.EnsureBuilt()
+
     return ns, env
 end
 
@@ -173,6 +178,40 @@ describe("the settings panel", function()
         assertEqual("pushUIDown", order[1])
         assertEqual("height", order[2], "height sits under reserve space")
         assertEqual("locked", order[3])
+    end)
+
+    -- Built parentless and shown, the canvas and its eight edit boxes sat live
+    -- on screen from login, outside any parent, until opening the category
+    -- finally put them somewhere. Nothing of ours should be live until asked.
+    it("builds nothing at all until the category is opened", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        assertTrue(ns.Settings.panel ~= nil, "the canvas exists")
+        assertFalse(ns.Settings.panel:IsShown(), "but is not shown at login")
+        assertEqual(env.UIParent, ns.Settings.panel.parent, "and is parented")
+        assertEqual(0, #ns.Settings.controls, "no widgets exist yet")
+
+        ns.Settings.EnsureBuilt()
+        assertTrue(#ns.Settings.controls > 0, "built on demand")
+    end)
+
+    it("shows the version it is running, read from the .toc", function()
+        local ns, env = loggedIn()
+
+        -- Read from the addon's own metadata rather than a constant in the
+        -- source, which would drift from the .toc the moment one is bumped.
+        assertEqual("Version 9.9.9", ns.Settings.version:GetText())
+    end)
+
+    it("builds once, however many times it is opened", function()
+        local ns, env = loggedIn()
+        local first = #ns.Settings.controls
+
+        ns.Settings.EnsureBuilt()
+        ns.Settings.panel.scripts.OnShow(ns.Settings.panel)
+
+        assertEqual(first, #ns.Settings.controls, "no duplicate controls")
     end)
 
     it("draws a divider between the groups, and only between them", function()

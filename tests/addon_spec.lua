@@ -306,6 +306,41 @@ describe("the bar's edge", function()
     end)
 end)
 
+describe("the bar's bevel", function()
+    -- A dark line immediately above the gold edge reads as a shadow cast by a
+    -- lit rim, which is what makes the edge look raised rather than painted on.
+    it("sits directly above the gold edge, a single pixel tall", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        local bevel = env.ForeverBar.bevel
+        assertTrue(bevel ~= nil, "the bar has a bevel")
+
+        local point, relativeTo, relativePoint = bevel:GetPoint(1)
+        assertEqual("BOTTOMLEFT", point)
+        assertEqual(env.ForeverBar.border, relativeTo, "anchored to the gold edge")
+        assertEqual("TOPLEFT", relativePoint)
+        assertEqual(1, bevel:GetHeight())
+    end)
+
+    it("stays a single pixel whatever the bar height", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        helpers.command(env, "bar height 48")
+        assertEqual(1, env.ForeverBar.bevel:GetHeight())
+    end)
+
+    it("is darker than the bar it sits under", function()
+        local ns, env = helpers.loadAddon()
+        helpers.login(ns, env)
+
+        local fill = env.ForeverBar.bevel.colorTexture
+        assertTrue(fill ~= nil, "painted with a flat colour")
+        assertTrue(fill[1] < 0.114, "darker than the bottom of the gradient")
+    end)
+end)
+
 describe("module text colour", function()
     -- The bar owns this, not the modules: GameFontNormal is WoW gold, which is
     -- also the bar's background, so a module left to its own devices renders

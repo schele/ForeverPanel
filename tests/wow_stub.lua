@@ -180,6 +180,21 @@ local function makeWidget(kind, parent)
         return color[1], color[2], color[3], color[4]
     end
 
+    function widget:SetAutoFocus(value)
+        self.autoFocus = value and true or false
+    end
+
+    function widget:ClearFocus()
+        self.focusCleared = true
+    end
+    function widget:EnableKeyboard(value)
+        self.keyboardEnabled = value and true or false
+    end
+
+    function widget:SetPropagateKeyboardInput(value)
+        self.propagateKeys = value and true or false
+    end
+
     function widget:SetJustifyH() end
     function widget:SetColorTexture(r, g, b, a)
         self.colorTexture = { r, g, b, a }
@@ -307,6 +322,39 @@ function stub.newEnv()
     -- names them directly.
     env._G = env
 
+    env.__overrideBindings = {}
+    env.__chatOpenedWith = nil
+    env.__inCombat = false
+    env.modifiers = {}
+
+    function env.InCombatLockdown()
+        return env.__inCombat
+    end
+
+    function env.SetOverrideBindingClick(owner, priority, key, buttonName)
+        env.__overrideBindings[key] = buttonName
+    end
+
+    function env.ClearOverrideBindings()
+        env.__overrideBindings = {}
+    end
+
+    function env.ChatFrame_OpenChat(text)
+        env.__chatOpenedWith = text
+    end
+
+    function env.IsControlKeyDown()
+        return env.modifiers.ctrl and true or false
+    end
+
+    function env.IsShiftKeyDown()
+        return env.modifiers.shift and true or false
+    end
+
+    function env.IsAltKeyDown()
+        return env.modifiers.alt and true or false
+    end
+
     env.__cvars = {}
 
     function env.SetCVar(name, value)
@@ -429,6 +477,12 @@ function stub.newEnv()
         end,
         OpenToCategory = function(id)
             env.__openedCategory = id
+        end,
+    }
+
+    env.C_AddOns = {
+        GetAddOnMetadata = function(_, field)
+            return field == "Version" and "9.9.9" or nil
         end,
     }
 

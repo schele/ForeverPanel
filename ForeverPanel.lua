@@ -40,6 +40,9 @@ end
 local settings = {}
 ns.settings = settings
 
+-- What Settings.lua knows how to render.
+local SETTING_TYPES = { checkbox = true, slider = true, keytable = true }
+
 --- Declare a configurable value.
 -- store/key address it inside the database (ns.db[store][key]); type is
 -- "checkbox" or "slider"; onChange runs after a change so the owner can react.
@@ -51,8 +54,8 @@ function ns.RegisterSetting(definition)
     assert(type(key) == "string" and key ~= "", "setting requires a key")
     assert(type(definition.name) == "string", "setting requires a name")
     assert(
-        definition.type == "checkbox" or definition.type == "slider",
-        "setting type must be checkbox or slider"
+        SETTING_TYPES[definition.type],
+        "unknown setting type: " .. tostring(definition.type)
     )
 
     -- A setting with no default would read nil and write somewhere nothing

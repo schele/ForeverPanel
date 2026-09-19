@@ -62,6 +62,11 @@ local BACKGROUND_BOTTOM = { r = 0.114, g = 0.055, b = 0.035 }
 -- separates the bar from the game world underneath it.
 local BORDER_COLOR = { r = 0.443, g = 0.361, b = 0.235 }
 local BORDER_HEIGHT = 2
+-- A dark line immediately above the gold edge, read as the shadow a lit rim
+-- casts. Without it the edge is a painted stripe; with it the bar has depth.
+-- Darker than the bottom of the background gradient, or it would not register.
+local BEVEL_COLOR = { r = 0.063, g = 0.031, b = 0.020 }
+local BEVEL_HEIGHT = 1
 -- The bar owns the text colour rather than leaving it to each module, so a new
 -- module cannot render itself unreadable by leaving GameFontNormal alone.
 local TEXT_COLOR = { r = 1, g = 1, b = 1 }
@@ -763,6 +768,13 @@ function Bar:OpenMenu(owner)
             resetLayout()
             ns.Print("Module order reset.")
         end)
+        -- Reachable with the mouse alone, which is the point: it is for when
+        -- the keyboard is captured and a slash command cannot be typed.
+        root:CreateButton("Unstick keyboard", function()
+            if ns.ReportKeyboard then
+                ns.ReportKeyboard()
+            end
+        end)
     end)
 end
 
@@ -819,6 +831,13 @@ function Bar:Initialize()
     border:SetHeight(BORDER_HEIGHT)
     border:SetColorTexture(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 1)
     barFrame.border = border
+
+    local bevel = barFrame:CreateTexture(nil, "BORDER")
+    bevel:SetPoint("BOTTOMLEFT", border, "TOPLEFT")
+    bevel:SetPoint("BOTTOMRIGHT", border, "TOPRIGHT")
+    bevel:SetHeight(BEVEL_HEIGHT)
+    bevel:SetColorTexture(BEVEL_COLOR.r, BEVEL_COLOR.g, BEVEL_COLOR.b, 1)
+    barFrame.bevel = bevel
 
     self.frame = barFrame
 

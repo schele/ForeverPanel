@@ -9,6 +9,7 @@ M.FILES = {
     "Modules/Clock.lua",
     "Modules/XP.lua",
     "Modules/UITweaks.lua",
+    "Modules/ChatKeys.lua",
     "Modules/Settings.lua",
 }
 
