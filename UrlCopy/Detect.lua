@@ -124,8 +124,15 @@ end
 
 --- Consume a host from `index`: word characters and hyphens, joined by dots.
 -- Returns the host and the position just past it, or nil.
+--
+-- High bytes are admitted the same way the path class admits them, so an IDN
+-- host survives whole. Cutting one at its first high byte was the worse of the
+-- two failures available: "https://räksmörgås.se/meny" became "https://r",
+-- which is not a link anyone posted. It costs nothing in false positives,
+-- because the TLD allowlist below is ASCII and untouched -- the last label
+-- still has to be a domain we recognise.
 local function consumeHost(message, index)
-    local host = message:match("^[%w%-]+[%w%-%.]*", index)
+    local host = message:match("^[%w%-\128-\255]+[%w%-%.\128-\255]*", index)
     if not host then
         return nil
     end

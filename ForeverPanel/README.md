@@ -35,7 +35,7 @@ stops accidental drags and `/fp bar reset` puts everything back.
 
 The repo's `package.ps1` does step 1 for you, from the root:
 
-    ../package.ps1 ForeverPanel -Install
+    .\package.ps1 ForeverPanel -Install
 
 See the [repo README](../README.md) for packaging and test commands.
 
@@ -140,7 +140,7 @@ outside the game against a stubbed WoW API (`tests/wow_stub.lua`).
 From the repo root:
 
 ```powershell
-..\run-tests.ps1 ForeverPanel
+.\run-tests.ps1 ForeverPanel
 ```
 
 Or by hand, from this folder:

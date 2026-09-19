@@ -210,9 +210,41 @@ describe("non-ASCII paths", function()
     end)
 
     it("does not grant a bare domain a non-ASCII TLD it still lacks", function()
-        -- The host class and the allowlist are untouched: "så" is not an
-        -- ASCII TLD on the list, so this must stay a bare sentence.
+        -- The allowlist is ASCII: "så" is not a TLD on it, so this must stay
+        -- a bare sentence however much of it the host class will accept.
         none("hej.så där")
+    end)
+end)
+
+describe("non-ASCII hosts", function()
+    it("keeps an IDN host instead of cutting it at the first high byte", function()
+        -- .se registers IDN domains, so this is a link a Swedish player can
+        -- actually be handed. Cut short it resolved to nothing at all.
+        assertEqual(
+            "https://räksmörgås.se/meny",
+            one("kolla https://räksmörgås.se/meny")
+        )
+    end)
+
+    it("keeps an IDN host with no scheme", function()
+        assertEqual("räksmörgås.se", one("kolla räksmörgås.se"))
+    end)
+
+    it("keeps an IDN host behind www.", function()
+        assertEqual("www.räksmörgås.se/x", one("www.räksmörgås.se/x"))
+    end)
+
+    it("starts a bare domain at the word, not inside it", function()
+        -- Before the host class admitted high bytes this matched "ping.se":
+        -- the scanner could not start at K, so it started after the ö and
+        -- handed the player a domain nobody had written.
+        assertEqual("Köping.se", one("Köping.se är en stad"))
+    end)
+
+    it("still finds a URL opened by a non-ASCII quote", function()
+        -- The boundary rule must keep treating a high byte as the end of
+        -- whatever came before, or a quoted link stops being found at all.
+        assertMatch("^https://example%.com", one("«https://example.com/a"))
     end)
 end)
 
