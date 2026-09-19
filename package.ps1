@@ -1,15 +1,20 @@
 #requires -Version 5.1
 <#
-    Packages ForeverPanel into dist/ForeverPanel-<version>.zip.
+    Packages each addon in this repo into dist/<name>-<version>.zip.
 
-    The zip contains a single top-level ForeverPanel/ folder, so it can be
-    extracted straight into Interface/AddOns.
+        .\package.ps1                          every addon
+        .\package.ps1 ForeverPanel             just that one
+        .\package.ps1 ForeverPanel -Install    and copy it into the client
 
-    -Install also copies the addon into a WoW AddOns folder. Pass -WowPath to
-    point at a different install; the default is the Classic beta client.
+    An addon is any top-level folder holding a .toc. The zip contains a single
+    top-level folder named after the addon, so it extracts straight into
+    Interface/AddOns.
+
+    -Install copies into a WoW client; -WowPath picks which one.
 #>
 [CmdletBinding()]
 param(
+    [string[]]$Addon,
     [switch]$Install,
     [string]$WowPath = "C:\Program Files (x86)\World of Warcraft\_classic_beta_"
 )
@@ -18,76 +23,99 @@ $ErrorActionPreference = "Stop"
 
 Set-Location $PSScriptRoot
 
-$toc = "ForeverPanel.toc"
-if (-not (Test-Path $toc)) {
-    Write-Error "$toc not found."
+$folders = Get-ChildItem -Directory | Where-Object {
+    Test-Path (Join-Path $_.FullName "$($_.Name).toc")
 }
 
-$tocLines = Get-Content $toc
-
-$version = ($tocLines | Where-Object { $_ -match "^##\s*Version:\s*(.+)$" } |
-    ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
-if (-not $version) {
-    Write-Error "No '## Version:' line in $toc."
-}
-
-# Everything the TOC loads, plus the TOC and readme.
-$files = @($toc, "README.md")
-foreach ($line in $tocLines) {
-    $trimmed = $line.Trim()
-    if ($trimmed -and -not $trimmed.StartsWith("#")) {
-        $files += ($trimmed -replace "\\", "/")
+if ($Addon) {
+    $folders = $folders | Where-Object { $Addon -contains $_.Name }
+    $missing = $Addon | Where-Object { $folders.Name -notcontains $_ }
+    if ($missing) {
+        Write-Error "No such addon: $($missing -join ', ')"
     }
 }
 
-$missing = $files | Where-Object { -not (Test-Path $_) }
-if ($missing) {
-    Write-Error "Listed in $toc but missing on disk: $($missing -join ', ')"
+if (-not $folders) {
+    Write-Error "No addons found. An addon is a folder containing <name>.toc."
 }
 
-$staging = Join-Path ([System.IO.Path]::GetTempPath()) ("ForeverPanel-pkg-" + [guid]::NewGuid().ToString("N"))
-$addonRoot = Join-Path $staging "ForeverPanel"
+foreach ($folder in $folders) {
+    $name = $folder.Name
+    $toc = Join-Path $folder.FullName "$name.toc"
+    $tocLines = Get-Content $toc
 
-try {
-    foreach ($file in $files) {
-        $target = Join-Path $addonRoot $file
-        $targetDir = Split-Path $target -Parent
-        if (-not (Test-Path $targetDir)) {
-            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+    $version = ($tocLines | Where-Object { $_ -match "^##\s*Version:\s*(.+)$" } |
+        ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
+    if (-not $version) {
+        Write-Error "No '## Version:' line in $toc."
+    }
+
+    # Everything the TOC loads, plus the TOC itself. Read from the .toc rather
+    # than globbed, so anything added there ships and anything missing fails
+    # the build instead of shipping broken.
+    $required = @("$name.toc")
+    foreach ($line in $tocLines) {
+        $trimmed = $line.Trim()
+        if ($trimmed -and -not $trimmed.StartsWith("#")) {
+            $required += ($trimmed -replace "\\", "/")
         }
-        Copy-Item $file $target
     }
 
-    $dist = Join-Path $PSScriptRoot "dist"
-    if (-not (Test-Path $dist)) {
-        New-Item -ItemType Directory -Path $dist | Out-Null
+    $missingFiles = $required | Where-Object { -not (Test-Path (Join-Path $folder.FullName $_)) }
+    if ($missingFiles) {
+        Write-Error "Listed in $name.toc but missing on disk: $($missingFiles -join ', ')"
     }
 
-    $zip = Join-Path $dist "ForeverPanel-$version.zip"
-    if (Test-Path $zip) {
-        Remove-Item $zip -Force
+    # The readme rides along when there is one, but is not required.
+    $files = $required
+    if (Test-Path (Join-Path $folder.FullName "README.md")) {
+        $files += "README.md"
     }
 
-    Compress-Archive -Path $addonRoot -DestinationPath $zip
-    Write-Host "Packaged $($files.Count) files -> $zip"
+    $staging = Join-Path ([System.IO.Path]::GetTempPath()) ("$name-pkg-" + [guid]::NewGuid().ToString("N"))
+    $addonRoot = Join-Path $staging $name
 
-    if ($Install) {
-        $addons = Join-Path $WowPath "Interface\AddOns"
-        if (-not (Test-Path $addons)) {
-            New-Item -ItemType Directory -Path $addons -Force | Out-Null
-        }
-
-        $installed = Join-Path $addons "ForeverPanel"
-        if (Test-Path $installed) {
-            Remove-Item $installed -Recurse -Force
+    try {
+        foreach ($file in $files) {
+            $target = Join-Path $addonRoot $file
+            $targetDir = Split-Path $target -Parent
+            if (-not (Test-Path $targetDir)) {
+                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            }
+            Copy-Item (Join-Path $folder.FullName $file) $target
         }
 
-        Copy-Item $addonRoot $addons -Recurse
-        Write-Host "Installed -> $installed"
+        $dist = Join-Path $PSScriptRoot "dist"
+        if (-not (Test-Path $dist)) {
+            New-Item -ItemType Directory -Path $dist | Out-Null
+        }
+
+        $zip = Join-Path $dist "$name-$version.zip"
+        if (Test-Path $zip) {
+            Remove-Item $zip -Force
+        }
+
+        Compress-Archive -Path $addonRoot -DestinationPath $zip
+        Write-Host "Packaged $($files.Count) files -> $zip"
+
+        if ($Install) {
+            $addons = Join-Path $WowPath "Interface\AddOns"
+            if (-not (Test-Path $addons)) {
+                New-Item -ItemType Directory -Path $addons -Force | Out-Null
+            }
+
+            $installed = Join-Path $addons $name
+            if (Test-Path $installed) {
+                Remove-Item $installed -Recurse -Force
+            }
+
+            Copy-Item $addonRoot $addons -Recurse
+            Write-Host "Installed -> $installed"
+        }
     }
-}
-finally {
-    if (Test-Path $staging) {
-        Remove-Item $staging -Recurse -Force
+    finally {
+        if (Test-Path $staging) {
+            Remove-Item $staging -Recurse -Force
+        }
     }
 }
