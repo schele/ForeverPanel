@@ -68,3 +68,112 @@ end
 function History.Clear()
     seen = {}
 end
+
+-- ForeverPanel's blue: the same hand across both addons, and nothing like the
+-- colours the game uses for item quality, so a link of ours never reads as one
+-- of the game's.
+local LINK_COLOR = "ff66ccff"
+Chat.LINK_COLOR = LINK_COLOR
+
+-- Past this many characters a link starts pushing the rest of the line off the
+-- chat frame, which is the point at which showing the host alone earns its way.
+local SHORTEN_OVER = 40
+
+--- The link text for a URL: our own hyperlink type, coloured and bracketed.
+function Chat.Link(url)
+    local display = url
+    if ns.db and ns.db.chat.shorten and #url > SHORTEN_OVER then
+        display = ns.Detect.Shorten(url)
+    end
+
+    return string.format("|Hurlcopy:%s|h|c%s[%s]|r|h", url, LINK_COLOR, display)
+end
+
+--- Replace each span with its link.
+-- Takes the spans rather than finding them, so the filter scans a message once
+-- and feeds both the history and this from the one pass.
+function Chat.Rewrite(message, spans)
+    if not spans or #spans == 0 then
+        return nil
+    end
+
+    local pieces = {}
+    local cursor = 1
+
+    for _, span in ipairs(spans) do
+        pieces[#pieces + 1] = message:sub(cursor, span.from - 1)
+        pieces[#pieces + 1] = Chat.Link(span.text)
+        cursor = span.to + 1
+    end
+
+    pieces[#pieces + 1] = message:sub(cursor)
+    return table.concat(pieces)
+end
+
+--- The chat filter. Returns nothing to leave a message alone, or false and a
+-- replacement to change it, which is the contract ChatFrame.lua expects.
+function Chat.Filter(_, _, message, ...)
+    if type(message) ~= "string" then
+        return false
+    end
+
+    local spans = ns.Detect.Find(message)
+    if #spans == 0 then
+        return false
+    end
+
+    -- Recorded whether or not chat is rewritten. That is what makes the switch
+    -- safe to turn off: /url still has everything, so nothing is lost by it.
+    for _, span in ipairs(spans) do
+        ns.History.Add(span.text)
+    end
+
+    if not ns.db.chat.rewrite then
+        return false
+    end
+
+    return false, Chat.Rewrite(message, spans), ...
+end
+
+Chat.EVENTS = {
+    "CHAT_MSG_SAY",
+    "CHAT_MSG_YELL",
+    "CHAT_MSG_EMOTE",
+    "CHAT_MSG_GUILD",
+    "CHAT_MSG_OFFICER",
+    "CHAT_MSG_PARTY",
+    "CHAT_MSG_PARTY_LEADER",
+    "CHAT_MSG_RAID",
+    "CHAT_MSG_RAID_LEADER",
+    "CHAT_MSG_RAID_WARNING",
+    "CHAT_MSG_INSTANCE_CHAT",
+    "CHAT_MSG_INSTANCE_CHAT_LEADER",
+    "CHAT_MSG_WHISPER",
+    "CHAT_MSG_WHISPER_INFORM",
+    "CHAT_MSG_BN_WHISPER",
+    "CHAT_MSG_BN_WHISPER_INFORM",
+    "CHAT_MSG_CHANNEL",
+    "CHAT_MSG_SYSTEM",
+}
+
+local installed = false
+
+--- Hook into chat. Idempotent: registering the same filter twice would run it
+-- twice and wrap our own links in links.
+function Chat.Install()
+    if installed then
+        return
+    end
+    installed = true
+
+    if not ChatFrame_AddMessageEventFilter then
+        ns.Print("This client has no chat filters. /url still works.")
+        return
+    end
+
+    for _, event in ipairs(Chat.EVENTS) do
+        ChatFrame_AddMessageEventFilter(event, Chat.Filter)
+    end
+end
+
+ns.OnLogin(Chat.Install)
