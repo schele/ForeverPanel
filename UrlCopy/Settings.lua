@@ -109,9 +109,9 @@ local function ensureBuilt()
     hint:SetWidth(PANEL_WIDTH - PADDING * 2)
     hint:SetJustifyH("LEFT")
     hint:SetText(
-        "Click a link in chat, or type /url. WoW has no clipboard, so a box "
-        .. "with the link selected is as far as any addon can take you: "
-        .. "Ctrl+C from there."
+        "Click a link in chat, or type /url 1 for the most recent one. WoW has "
+        .. "no clipboard, so a box with the link selected is as far as any "
+        .. "addon can take you: Ctrl+C from there."
     )
 
     local y = -PADDING - ROW_HEIGHT * 2
@@ -214,7 +214,7 @@ end
 --- Open the panel in the game's options window.
 function ns.OpenSettings()
     if not category then
-        ns.Print("This client has no settings panel. Use /url help for commands.")
+        ns.Print("This client has no settings panel. Use /url for commands.")
         return
     end
 
@@ -237,6 +237,6 @@ ns.OnLogin(function()
     if Settings and Settings.RegisterCanvasLayoutCategory then
         register()
     else
-        ns.Print("This client has no settings panel API. Use /url help instead.")
+        ns.Print("This client has no settings panel API. Use /url instead.")
     end
 end)

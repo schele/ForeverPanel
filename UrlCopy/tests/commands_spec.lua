@@ -43,26 +43,33 @@ describe("clicking a link", function()
     end)
 end)
 
-describe("/url", function()
-    it("opens the box on the most recent link", function()
+describe("a bare /url", function()
+    it("lists the commands rather than copying anything", function()
         local ns, env = loggedIn()
-        helpers.say(env, "first a.com")
-        helpers.say(env, "then b.com")
+        helpers.say(env, "someone posts a.com")
 
         helpers.command(env, "")
-        assertEqual("b.com", helpers.box(env):GetText())
-    end)
 
-    it("says so when nothing has been seen", function()
-        local ns, env = loggedIn()
-        helpers.command(env, "")
-
-        assertNil(helpers.box(env))
-        assertMatch("No link", helpers.printed(env))
+        -- ForeverPanel's bare /fp lists its commands, and the two addons print
+        -- their login lines one above the other. A bare /url that copied the
+        -- last link instead was a trap, and it caught its first player inside
+        -- a minute of installing.
+        assertNil(helpers.box(env), "no box, even with a link to hand")
+        assertMatch("List the links being remembered", helpers.printed(env))
     end)
 end)
 
 describe("/url <n>", function()
+    it("opens the box on the most recent link with 1", function()
+        local ns, env = loggedIn()
+        helpers.say(env, "first a.com")
+        helpers.say(env, "then b.com")
+
+        -- What a bare /url used to do, two characters longer.
+        helpers.command(env, "1")
+        assertEqual("b.com", helpers.box(env):GetText())
+    end)
+
     it("opens the box on the nth link", function()
         local ns, env = loggedIn()
         helpers.say(env, "first a.com")
@@ -140,12 +147,22 @@ describe("/url on and /url off", function()
 end)
 
 describe("help", function()
-    it("mentions the bare and numeric forms, which are not named commands", function()
+    it("mentions the numeric form, which is not a named command", function()
         local ns, env = loggedIn()
         helpers.command(env, "help")
 
-        local printed = helpers.printed(env)
-        assertMatch("/url %-", printed, "the bare form is documented")
-        assertMatch("/url <n>", printed, "and the numeric one")
+        assertMatch("/url <n>", helpers.printed(env))
+    end)
+
+    it("is what a bare /url and an explicit /url help both give", function()
+        local ns, env = loggedIn()
+
+        helpers.command(env, "help")
+        local explicit = helpers.printed(env)
+
+        local _, fresh = loggedIn()
+        helpers.command(fresh, "")
+
+        assertEqual(explicit, helpers.printed(fresh), "one listing, two ways in")
     end)
 end)

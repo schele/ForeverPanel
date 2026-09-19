@@ -50,21 +50,23 @@ describe("commands", function()
 
     it("shows the help lines that are not named commands", function()
         local ns, env = helpers.loadAddon(ONLY_CORE)
-        ns.RegisterHelpLine("/url - Copy the most recent link")
+        ns.RegisterHelpLine("/url <n> - Copy the nth link")
         helpers.login(ns, env)
 
         helpers.command(env, "help")
-        assertMatch("Copy the most recent link", helpers.printed(env))
+        assertMatch("Copy the nth link", helpers.printed(env))
     end)
 
-    it("sends a bare /url to BareCommand, not to help", function()
+    it("shows the command list for a bare /url, the way /fp does", function()
         local ns, env = helpers.loadAddon(ONLY_CORE)
-        local ran = false
-        ns.BareCommand = function() ran = true end
+        ns.RegisterCommand("ping", "Ping the thing", function() end)
         helpers.login(ns, env)
 
+        -- ForeverPanel's bare /fp lists its commands, and the two addons print
+        -- their login lines one above the other. A bare /url that did anything
+        -- else was a trap, and it caught its first player inside a minute.
         helpers.command(env, "")
-        assertTrue(ran, "the common case gets the shortest gesture")
+        assertMatch("Ping the thing", helpers.printed(env))
     end)
 
     it("sends a number to NumberCommand", function()

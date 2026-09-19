@@ -190,14 +190,9 @@ end
 
 ns.OnLogin(Chat.Install)
 
--- The two inputs that are not named commands. They belong here rather than in
+-- The one input that is not a named command. It belongs here rather than in
 -- UrlCopy.lua because this is the file that knows what a link is.
-ns.RegisterHelpLine("/url - Copy the most recent link")
-ns.RegisterHelpLine("/url <n> - Copy the nth link from /url list")
-
-ns.BareCommand = function()
-    ns.Popup.Show(History.Get(1))
-end
+ns.RegisterHelpLine("/url <n> - Copy the nth link from /url list, newest first")
 
 ns.NumberCommand = function(index)
     local url = History.Get(index)

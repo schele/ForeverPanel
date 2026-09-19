@@ -49,13 +49,13 @@ interface version.
 
 `/urlcopy` or the short `/url`:
 
-- `/url` - Copy the most recent link
-- `/url <n>` - Copy the nth link from `/url list`
+- `/url` - Show the command list
+- `/url 1` - Copy the most recent link
+- `/url <n>` - Copy the nth link from `/url list`, newest first
 - `/url list` - List the links being remembered
 - `/url clear` - Forget them
 - `/url on` / `/url off` - Whether chat is rewritten at all
 - `/url settings` - Open the settings panel
-- `/url help` - Show the command list
 
 ## Settings
 

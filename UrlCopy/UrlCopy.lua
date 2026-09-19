@@ -134,21 +134,18 @@ end
 
 ns.ShowHelp = showHelp
 
--- The two inputs that are not named commands: a bare "/url" and "/url 3".
--- Chat.lua points them at the copy box. Until it has, and if it ever fails to
--- load, they fall back to the command list rather than to silence.
-ns.BareCommand = showHelp
+-- "/url 3" is the one input that is not a named command. Chat.lua points it at
+-- the copy box; until it has, and if that file ever fails to load, a number
+-- falls through to the command list rather than to silence.
 ns.NumberCommand = nil
 
 local function runCommand(msg)
     local input = msg and msg:match("^%s*(.-)%s*$") or ""
 
-    if input == "" then
-        ns.BareCommand()
-        return
-    end
-
-    if input == "help" then
+    -- A bare "/url" lists the commands, the same as a bare "/fp" does. The two
+    -- addons print their login lines one above the other, so a bare command
+    -- that meant something different in each was a trap.
+    if input == "" or input == "help" then
         showHelp()
         return
     end
@@ -197,6 +194,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             handler()
         end
 
-        ns.Print("Loaded. Type /url help for commands.")
+        ns.Print("Loaded. Type /url for commands.")
     end
 end)
