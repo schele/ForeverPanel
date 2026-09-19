@@ -8,6 +8,7 @@ M.FILES = {
     "Modules/Money.lua",
     "Modules/Clock.lua",
     "Modules/XP.lua",
+    "Modules/Bags.lua",
     "Modules/UITweaks.lua",
     "Modules/ChatKeys.lua",
     "Modules/Settings.lua",

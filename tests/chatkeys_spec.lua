@@ -62,7 +62,7 @@ describe("chat key rows", function()
 
         local rows = ns.db.chat.keys
         assertEqual("CTRL-S", rows[1].key)
-        assertEqual("/say", rows[1].command)
+        assertEqual("/s", rows[1].command)
         assertTrue(#rows > 1, "more than one to start with")
     end)
 
@@ -85,7 +85,7 @@ describe("chat key rows", function()
     it("opens chat with the command and a trailing space", function()
         local ns, env = loggedIn()
 
-        assertEqual("/say ", pressRow(ns, env, 1), "cursor lands after the command")
+        assertEqual("/s ", pressRow(ns, env, 1), "cursor lands after the command")
     end)
 
     it("follows a row that has been retyped", function()
@@ -150,8 +150,8 @@ describe("the chat key table on the panel", function()
         row.command:SetText("/half-typed")
         row.command.scripts.OnEscapePressed(row.command)
 
-        assertEqual("/say", ns.db.chat.keys[1].command, "the half-typed edit was abandoned")
-        assertEqual("/say", row.command:GetText(), "and the box shows the stored value again")
+        assertEqual("/s", ns.db.chat.keys[1].command, "the half-typed edit was abandoned")
+        assertEqual("/s", row.command:GetText(), "and the box shows the stored value again")
     end)
 
     -- An EditBox takes focus as it comes into existence, and SetAutoFocus(false)

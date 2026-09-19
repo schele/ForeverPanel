@@ -480,6 +480,35 @@ function stub.newEnv()
         end,
     }
 
+    -- Free slots per bag, and the bag's type: 0 is general purpose, anything
+    -- else only takes particular items.
+    env.NUM_BAG_SLOTS = 4
+    env.bagSlots = {
+        [0] = { free = 4, total = 16, kind = 0 },
+        [1] = { free = 6, total = 16, kind = 0 },
+        [2] = { free = 2, total = 8, kind = 0 },
+        [3] = { free = 0, total = 0, kind = 0 },
+        [4] = { free = 0, total = 0, kind = 0 },
+    }
+
+    env.C_Container = {
+        GetContainerNumFreeSlots = function(bag)
+            local entry = env.bagSlots[bag]
+            if not entry then
+                return nil
+            end
+            return entry.free, entry.kind
+        end,
+        GetContainerNumSlots = function(bag)
+            local entry = env.bagSlots[bag]
+            return entry and entry.total or 0
+        end,
+    }
+
+    function env.OpenAllBags()
+        env.__bagsOpened = true
+    end
+
     env.C_AddOns = {
         GetAddOnMetadata = function(_, field)
             return field == "Version" and "9.9.9" or nil

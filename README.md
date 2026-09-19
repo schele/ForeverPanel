@@ -7,6 +7,7 @@ Out of the box:
 | Side | Module | Shows |
 |---|---|---|
 | Left | `money` | Gold, silver and copper with the in-game coin icons |
+| Left | `bags` | Free bag slots with a bag icon, click to open your bags |
 | Left | `xp` | `xx.xx% XP` through the current level, click to count down to the next one instead; hidden at max level or with XP turned off |
 | Right | `clock` | Local time, click to toggle 12/24 hour |
 

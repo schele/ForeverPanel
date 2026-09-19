@@ -9,10 +9,10 @@ local ROWS = 8
 -- client restores SavedVariables for no addon, so without these the table is
 -- empty every login.
 local SEED = {
-    { key = "CTRL-S", command = "/say" },
+    { key = "CTRL-S", command = "/s" },
     { key = "CTRL-G", command = "/g" },
     { key = "CTRL-T", command = "/trade" },
-    { key = "CTRL-Y", command = "/yell" },
+    { key = "CTRL-Y", command = "/y" },
     { key = "CTRL-P", command = "/p" },
 }
 

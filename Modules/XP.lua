@@ -37,7 +37,7 @@ ns.FormatXP = formatXP
 ns.Bar:RegisterModule({
     name = "xp",
     side = "LEFT",
-    order = 20,
+    order = 30,
     events = {
         "PLAYER_XP_UPDATE",
         "PLAYER_LEVEL_UP",

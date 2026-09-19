@@ -190,6 +190,9 @@ describe("dragging a module", function()
                 xp = { side = "LEFT", order = 10 },
                 money = { side = "RIGHT", order = 20 },
                 clock = { side = "RIGHT", order = 10 },
+                -- Off the left, so that side really does hold only the hidden
+                -- module this test is about.
+                bags = { side = "RIGHT", order = 30 },
             },
         })
         assertEqual("LEFT", ns.Bar:GetModule("xp").side)
