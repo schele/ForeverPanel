@@ -98,8 +98,17 @@ function Popup.Show(url)
         return nil
     end
 
+    local box = boxOf(dialog)
+    if not box then
+        -- The dialog was shown but we could not find its edit box: the client
+        -- did something unexpected. Printing the URL at least gets it to the
+        -- player, since that is the thing they actually wanted.
+        ns.Print("Could not locate the copy box. Here is the link instead: " .. url)
+        return nil
+    end
+
     -- Belt and braces: a client that shows the dialog without firing OnShow
     -- would otherwise leave an empty box on screen.
-    present(boxOf(dialog))
+    present(box)
     return dialog
 end

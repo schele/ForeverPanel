@@ -214,6 +214,7 @@ function stub.newEnv()
     -- Static popups ----------------------------------------------------
     env.StaticPopupDialogs = {}
     env.__shownPopup = nil
+    env.__shownPopups = {}
 
     function env.StaticPopup_Show(which)
         local definition = env.StaticPopupDialogs[which]
@@ -221,26 +222,32 @@ function stub.newEnv()
             return nil
         end
 
-        local dialog = makeWidget("Frame")
-        dialog.frameName = "StaticPopup1"
-        dialog.which = which
-        dialog.editBox = makeWidget("EditBox", dialog)
+        local dialog = env.__shownPopups[which]
+        if not dialog then
+            -- First show for this dialog type: create it.
+            dialog = makeWidget("Frame")
+            dialog.frameName = "StaticPopup1"
+            dialog.which = which
+            dialog.editBox = makeWidget("EditBox", dialog)
 
-        -- The client wires these template scripts onto the edit box.
-        if definition.EditBoxOnTextChanged then
-            dialog.editBox:SetScript("OnTextChanged", function(box)
-                definition.EditBoxOnTextChanged(box, dialog.data)
-            end)
-        end
-        if definition.EditBoxOnEnterPressed then
-            dialog.editBox:SetScript("OnEnterPressed", function(box)
-                definition.EditBoxOnEnterPressed(box, dialog.data)
-            end)
-        end
-        if definition.EditBoxOnEscapePressed then
-            dialog.editBox:SetScript("OnEscapePressed", function(box)
-                definition.EditBoxOnEscapePressed(box, dialog.data)
-            end)
+            -- The client wires these template scripts onto the edit box.
+            if definition.EditBoxOnTextChanged then
+                dialog.editBox:SetScript("OnTextChanged", function(box)
+                    definition.EditBoxOnTextChanged(box, dialog.data)
+                end)
+            end
+            if definition.EditBoxOnEnterPressed then
+                dialog.editBox:SetScript("OnEnterPressed", function(box)
+                    definition.EditBoxOnEnterPressed(box, dialog.data)
+                end)
+            end
+            if definition.EditBoxOnEscapePressed then
+                dialog.editBox:SetScript("OnEscapePressed", function(box)
+                    definition.EditBoxOnEscapePressed(box, dialog.data)
+                end)
+            end
+
+            env.__shownPopups[which] = dialog
         end
 
         env.__shownPopup = dialog
