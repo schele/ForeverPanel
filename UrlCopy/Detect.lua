@@ -180,7 +180,7 @@ local function matchAt(message, index)
         -- link at all. Absent, there is no bare "@" here for this to match,
         -- so afterScheme is untouched and consumeHost runs on the host as
         -- normal.
-        local afterUserinfo = message:match("^[%w%-%._~%%!%$&%*%+,;=:]*@()", afterScheme)
+        local afterUserinfo = message:match("^[%w%-%._~%%!%$&%*%+,;=:\128-\255]*@()", afterScheme)
         if afterUserinfo then
             afterScheme = afterUserinfo
         end
@@ -262,5 +262,14 @@ end
 -- are bracketed the same way.
 function Detect.Shorten(url)
     local host = url:match("^%a[%w%+%-%.]*://([^/%?#]+)") or url:match("^([^/%?#]+)")
-    return ((host or url):gsub("^www%.", ""))
+    host = host or url
+
+    -- The authority capture above does not exclude "@", so a URL carrying
+    -- userinfo (matched in full since Fix 2) would otherwise display
+    -- "user@host" as if the whole thing were the site. Drop everything up to
+    -- the last "@" first, so a "www." on the userinfo -- not the host -- can
+    -- never be the prefix the line below strips.
+    host = host:match("[^@]*$") or host
+
+    return (host:gsub("^www%.", ""))
 end

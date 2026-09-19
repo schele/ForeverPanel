@@ -75,6 +75,15 @@ describe("the scheme rule", function()
         )
     end)
 
+    it("matches past a non-ASCII userinfo prefix instead of truncating at it", function()
+        -- The same truncation Fix 2 closed for "user@host", surviving here
+        -- because this class did not get Fix 1's high-byte range.
+        assertEqual(
+            "https://aåb@example.com/x",
+            one("https://aåb@example.com/x")
+        )
+    end)
+
     it("still finds the modern @handle case, which is unrelated", function()
         -- The "@" here belongs to the path, not to a userinfo prefix before
         -- the host, and was never part of this bug.
@@ -303,6 +312,21 @@ describe("Shorten", function()
 
     it("adds no brackets, because the caller supplies those", function()
         assertNil(Detect.Shorten("https://example.com/a"):find("[", 1, true))
+    end)
+
+    it("shows only the real host, not a userinfo prefix in front of it", function()
+        assertEqual("example.com", Detect.Shorten("https://user@example.com/a"))
+    end)
+
+    it("does not strip www from a userinfo prefix and present it as the site", function()
+        -- The userinfo here is deliberately a fake host-shaped, www.-led
+        -- string: stripping "www." before discarding the userinfo would
+        -- present the fake prefix as though it were the site, when the
+        -- link actually goes to evil.ru.
+        assertEqual(
+            "evil.ru",
+            Detect.Shorten("https://www.blizzard-account-login-secure.com@evil.ru/verify")
+        )
     end)
 end)
 
