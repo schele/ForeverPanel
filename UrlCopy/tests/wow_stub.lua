@@ -145,6 +145,7 @@ function stub.newEnv()
 
     env.__frames = {}
     env.__printed = {}
+    env.__timers = {}
 
     -- In the client the addon environment *is* the global table, so code that
     -- reaches a frame by name through _G finds the same frames as code that
@@ -296,8 +297,13 @@ function stub.newEnv()
         end,
     }
 
+    -- The real client defers a timer past the current synchronous chain
+    -- rather than running it inline. That gap matters for the game-menu
+    -- backstop in Settings.lua: it has to still see suppressGameMenu true
+    -- when it runs, not find it already reset by a callback that ran before
+    -- the thing it is guarding against ever happened.
     env.C_Timer = {
-        After = function(_, fn) fn() end,
+        After = function(_, fn) table.insert(env.__timers, fn) end,
     }
 
     -- Both forms: hooksecurefunc(table, name, post) and the global-name form
@@ -312,6 +318,18 @@ function stub.newEnv()
             local result = original(...)
             post(...)
             return result
+        end
+    end
+
+    -- Test helper: run whatever C_Timer.After queued, then clear the queue.
+    -- No render pass and no tickers, unlike ForeverPanel's stub: nothing in
+    -- this addon measures text or polls on an interval, so a plain queue is
+    -- the whole of what a spec needs to drive.
+    function env.__runTimers()
+        local pending = env.__timers
+        env.__timers = {}
+        for _, fn in ipairs(pending) do
+            fn()
         end
     end
 
