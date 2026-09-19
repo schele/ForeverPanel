@@ -111,13 +111,24 @@ position:
 |---|---|---|
 | Scheme | `https://example.com/a/b?c=d` | `http`, `https`, `ftp` |
 | `www.` prefix | `www.example.co.uk/path` | No scheme needed |
-| IPv4 | `62.109.4.12`, `62.109.4.12:3724` | Optional port, for server addresses |
+| IPv4 | `62.109.4.12:3724`, `62.109.4.12/status` | Octets 0-255, and a port or a path is required |
 | Bare domain | `example.com/path`, `discord.gg/abc` | TLD must be on the allowlist |
 
 All four accept an optional `:port`. Every match has trailing punctuation
 stripped - full stop, comma, semicolon, colon, exclamation mark, question mark,
 closing bracket, quote - so "see example.com." links the domain and not the
 sentence's full stop.
+
+Parentheses and square brackets are not accepted inside a URL at all. They are
+legal there, but in chat they wrap a link far more often than they appear
+within one, and "(see example.com/thing)" losing its closing bracket to the
+link is the more common failure by a wide margin.
+
+**A bare dotted quad is not enough for the IPv4 rule.** It must carry a port or
+a path. Patch numbers, build numbers and addon versions are written as dotted
+quads constantly in this game's chat, and "1.14.4.2" is a version far more
+often than it is a server. This is the same judgement as the TLD allowlist,
+applied to the one other rule that can fire on text nobody meant as an address.
 
 ### The TLD allowlist
 
@@ -147,11 +158,20 @@ common enough in practice to be worth it.
   parsing.
 - A colour or texture escape - `|cffrrggbb`, `|r`, `|T...|t`.
 
-### URLs containing a pipe are refused
+### A URL can never contain a pipe
 
-`|` is WoW's escape character. A URL containing one is dropped rather than
-linked: wrapping it would let a crafted message close our link early and inject
-its own markup into the player's chat frame.
+`|` is WoW's escape character. A link we build that contained one would let a
+crafted message close our link early and inject its own markup into the
+player's chat frame.
+
+This is enforced structurally rather than by a check: `|` appears in none of
+the character classes the scanner uses, so a pipe ends a match instead of being
+swallowed by it. A message containing `http://evil.com|cffff0000` yields a link
+around `http://evil.com` and leaves the escape outside it, untouched.
+
+A test asserts the property directly - no output of `Chat.Rewrite` ever
+contains a pipe between `|Hurlcopy:` and its `|h` - so the guarantee is
+checked rather than merely argued.
 
 ## Chat integration
 
@@ -293,10 +313,13 @@ Specs:
 
 | File | Covers |
 |---|---|
-| `detect_spec.lua` | All four rules; optional ports; trailing punctuation; several URLs in one line; spans inside existing hyperlinks and colour escapes; pipe-bearing URLs refused; every excluded TLD staying unlinked; `Shorten` |
-| `chat_spec.lua` | Filter rewrites a message; rewriting off leaves it untouched but still records; the link's payload round-trips through `SetItemRef`; other link types ignored; shortened display still copies the full URL |
-| `history_spec.lua` | Newest first; a repeat moves rather than duplicates; the cap holds; `/url list` and `/url <n>`; `/url clear` |
-| `settings_spec.lua` | Defaults applied; a stored value beats a default; the toggle changes filter behaviour; shrinking the slider trims the history |
+| `addon_spec.lua` | Defaults applied at login; a stored value beats a default; the command dispatch, including `/url help` and an unknown command; `RegisterSetting` rejecting a setting with no default |
+| `detect_spec.lua` | All four rules; optional ports; trailing punctuation; several URLs in one line; spans inside existing hyperlinks and colour escapes; a pipe ending a match; every excluded TLD staying unlinked; a dotted quad that is a version number; `Shorten` |
+| `popup_spec.lua` | The box shows the URL, selected; typing in it restores the URL; an empty URL prints instead of opening |
+| `history_spec.lua` | Newest first; a repeat moves rather than duplicates; the cap holds; `Trim` |
+| `chat_spec.lua` | Filter rewrites a message; rewriting off leaves it untouched but still records; no link ever contains a pipe; shortened display still copies the full URL |
+| `commands_spec.lua` | The link's payload round-trips through `SetItemRef`; other link types ignored; `/url`, `/url <n>`, `/url list`, `/url clear`, `/url on`, `/url off` |
+| `settings_spec.lua` | The panel renders one control per registered setting; the checkbox writes through; shrinking the slider trims the history |
 
 `detect_spec.lua` carries the weight, because detection is where this addon is
 either right or quietly wrong. Frame behaviour and the real chat frame can only
