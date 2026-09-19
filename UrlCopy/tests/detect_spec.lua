@@ -196,6 +196,31 @@ describe("regions the scanner must not touch", function()
     it("ignores a texture escape", function()
         none("|TInterface\\Icons\\INV_Misc_Note_01:14|t")
     end)
+
+    it("treats an unterminated hyperlink as unsafe to the end of the message", function()
+        -- WoW's 255-byte chat limit routinely truncates a long item link,
+        -- leaving an |H with no closing |h. A still-open link is exactly the
+        -- case this skip region exists for, not an exception to it.
+        none("|Hitem:1|h[Hearthstone.net]")
+    end)
+
+    it("protects a second, unterminated hyperlink after a well-formed one closes", function()
+        none("|Hitem:1|h[A]|h ok |Hitem:2|h[evil.com]")
+    end)
+
+    it("does not let a malformed colour escape glue its tail onto the next domain", function()
+        -- Only 7 hex digits here, so no |c region forms; the leftover "x"
+        -- must not fuse with "example.com" into one match.
+        none("|cffff00example.com")
+    end)
+
+    it("does not let an atlas escape's closer fuse with the next domain", function()
+        none("|A:GarrMission-Vignette:16:16|aexample.com")
+    end)
+
+    it("does not let a BNet name escape's closer fuse with the next domain", function()
+        none("|Kf123|kexample.com")
+    end)
 end)
 
 describe("pipes", function()

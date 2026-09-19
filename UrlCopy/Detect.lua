@@ -56,6 +56,30 @@ local function skipRegions(message)
         end
     end
 
+    -- WoW's 255-byte chat limit routinely truncates a long item link, leaving
+    -- an |H or |T with no closing |h/|t. That escape is still open for the
+    -- rest of the message, so it must block matches to the end rather than
+    -- read as plain text the scanner is free to search inside.
+    for _, opener in ipairs({ "|H", "|T" }) do
+        local from = message:find(opener, 1, true)
+        while from do
+            local covered = false
+            for _, region in ipairs(regions) do
+                if from >= region.from and from <= region.to then
+                    covered = true
+                    break
+                end
+            end
+
+            if not covered then
+                regions[#regions + 1] = { from = from, to = #message }
+                break
+            end
+
+            from = message:find(opener, from + 1, true)
+        end
+    end
+
     return regions
 end
 
@@ -86,7 +110,11 @@ local function startsCleanly(message, index, regions)
     end
 
     local previous = message:sub(index - 1, index - 1)
-    return previous:match("[%w%-%._/@]") == nil
+    -- A pipe would otherwise read as a clean boundary, but an escape this
+    -- skip list does not model -- a malformed colour code, an atlas or BNet
+    -- escape -- still starts with one, and its leftover characters must not
+    -- glue onto the domain that follows it.
+    return previous:match("[%w%-%._/@|]") == nil
 end
 
 --- Consume a host from `index`: word characters and hyphens, joined by dots.
