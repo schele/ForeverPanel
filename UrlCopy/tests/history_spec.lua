@@ -65,6 +65,41 @@ describe("the history", function()
         assertEqual("site5.com", ns.History.Get(1))
     end)
 
+    it("empties the list when trimmed to zero", function()
+        local ns = loggedIn()
+        ns.History.Add("a.com")
+        ns.History.Add("b.com")
+
+        ns.History.Trim(0)
+        assertEqual(0, #ns.History.All())
+    end)
+
+    it("does not hang on a negative size and leaves the list empty", function()
+        local ns = loggedIn()
+        ns.History.Add("a.com")
+        ns.History.Add("b.com")
+
+        ns.History.Trim(-1)
+        assertEqual(0, #ns.History.All())
+    end)
+
+    it("falls back to ten when given nil or unparseable sizes", function()
+        local ns = loggedIn()
+        for index = 1, 15 do
+            ns.History.Add("site" .. index .. ".com")
+        end
+
+        ns.History.Trim(nil)
+        assertEqual(10, #ns.History.All(), "nil falls back to 10")
+
+        for index = 1, 15 do
+            ns.History.Add("more" .. index .. ".com")
+        end
+
+        ns.History.Trim("banana")
+        assertEqual(10, #ns.History.All(), "unparseable also falls back to 10")
+    end)
+
     it("forgets everything when cleared", function()
         local ns = loggedIn()
         ns.History.Add("a.com")

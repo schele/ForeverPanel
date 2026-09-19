@@ -29,7 +29,7 @@ local seen = {}
 
 --- Drop the oldest until at most `size` remain.
 function History.Trim(size)
-    size = tonumber(size) or DEFAULT_SIZE
+    size = math.max(tonumber(size) or DEFAULT_SIZE, 0)
 
     while #seen > size do
         table.remove(seen)
