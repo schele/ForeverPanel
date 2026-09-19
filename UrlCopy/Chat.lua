@@ -174,6 +174,67 @@ function Chat.Install()
     for _, event in ipairs(Chat.EVENTS) do
         ChatFrame_AddMessageEventFilter(event, Chat.Filter)
     end
+
+    -- Hooked rather than replaced, so every other link type reaches the
+    -- client's own handler untouched. It ignores a type it does not know,
+    -- which is what leaves room for ours.
+    if hooksecurefunc and SetItemRef then
+        hooksecurefunc("SetItemRef", function(link)
+            local url = type(link) == "string" and link:match("^urlcopy:(.+)$")
+            if url then
+                ns.Popup.Show(url)
+            end
+        end)
+    end
 end
 
 ns.OnLogin(Chat.Install)
+
+-- The two inputs that are not named commands. They belong here rather than in
+-- UrlCopy.lua because this is the file that knows what a link is.
+ns.RegisterHelpLine("/url - Copy the most recent link")
+ns.RegisterHelpLine("/url <n> - Copy the nth link from /url list")
+
+ns.BareCommand = function()
+    ns.Popup.Show(History.Get(1))
+end
+
+ns.NumberCommand = function(index)
+    local url = History.Get(index)
+    if not url then
+        ns.Print(string.format("No link %d. Try /url list.", index))
+        return
+    end
+
+    ns.Popup.Show(url)
+end
+
+ns.RegisterCommand("list", "List the links being remembered", function()
+    local all = History.All()
+    if #all == 0 then
+        ns.Print("No links seen yet. They are picked up as people say them.")
+        return
+    end
+
+    for index, url in ipairs(all) do
+        -- Clickable even with rewriting switched off: this is a direct answer
+        -- to a command, and with the switch off it is the only way left to
+        -- reach a link by clicking.
+        ns.Print(string.format("%d. %s", index, Chat.Link(url)))
+    end
+end)
+
+ns.RegisterCommand("clear", "Forget the remembered links", function()
+    History.Clear()
+    ns.Print("Forgotten.")
+end)
+
+ns.RegisterCommand("on", "Make URLs in chat clickable", function()
+    ns.db.chat.rewrite = true
+    ns.Print("Links in chat are clickable.")
+end)
+
+ns.RegisterCommand("off", "Leave chat alone", function()
+    ns.db.chat.rewrite = false
+    ns.Print("Chat left alone. /url still works.")
+end)
