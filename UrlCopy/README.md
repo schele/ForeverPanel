@@ -37,7 +37,7 @@ more often than it is a server.
 
 The repo's `package.ps1` does step 1 for you, from the root:
 
-    ../package.ps1 UrlCopy -Install
+    .\package.ps1 UrlCopy -Install
 
 See the [repo README](../README.md) for packaging and test commands.
 
@@ -77,7 +77,7 @@ The list is kept for the session only and is never saved.
 what lets the fiddly half of this addon be tested outside the client.
 
 `Chat.lua` registers a `ChatFrame_AddMessageEventFilter` on the chat events and
-rewrites each URL it finds into `|Hurlcopy:<url>|h`, one of the game's own
+rewrites each URL it finds into `|Hurlcopy:<url>|h|cff66ccff[<display>]|r|h`, one of the game's own
 hyperlinks with a type of our own. Clicks arrive through a
 `hooksecurefunc("SetItemRef", ...)`, which leaves every other link type
 reaching the client's handler untouched.
@@ -98,13 +98,13 @@ that run outside the game against a stubbed WoW API (`tests/wow_stub.lua`).
 From the repo root:
 
 ```powershell
-..\run-tests.ps1 UrlCopy
+.\run-tests.ps1 UrlCopy
 ```
 
-Or by hand, from this folder:
+Or a single suite by hand, from this folder:
 
 ```
-lua tests/runner.lua tests/detect_spec.lua tests/chat_spec.lua
+lua tests/runner.lua tests/detect_spec.lua
 ```
 
 The chat frame itself can only really be confirmed in the game client; the
