@@ -58,6 +58,28 @@ describe("the scheme rule", function()
     it("is found at the very end of a line", function()
         assertEqual("http://example.com", one("the place is http://example.com"))
     end)
+
+    it("matches past a userinfo prefix instead of truncating at it", function()
+        -- consumeHost used to stop at the "@" and hand back "https://user",
+        -- a link that is confidently shown and is not the one posted.
+        assertEqual(
+            "https://user@example.com/path",
+            one("https://user@example.com/path")
+        )
+    end)
+
+    it("matches past a userinfo prefix that carries a password too", function()
+        assertEqual(
+            "https://user:pass@example.com/path",
+            one("https://user:pass@example.com/path")
+        )
+    end)
+
+    it("still finds the modern @handle case, which is unrelated", function()
+        -- The "@" here belongs to the path, not to a userinfo prefix before
+        -- the host, and was never part of this bug.
+        assertEqual("https://example.com/@handle", one("https://example.com/@handle"))
+    end)
 end)
 
 describe("the www rule", function()
@@ -153,6 +175,35 @@ describe("trailing punctuation", function()
 
     it("keeps a trailing slash", function()
         assertEqual("http://example.com/", one("http://example.com/ is fine"))
+    end)
+end)
+
+describe("non-ASCII paths", function()
+    it("keeps a Swedish path instead of cutting it at the first high byte", function()
+        assertEqual(
+            "https://sv.wikipedia.org/wiki/Köping",
+            one("guide here https://sv.wikipedia.org/wiki/Köping")
+        )
+    end)
+
+    it("still stops at the space after a non-ASCII path", function()
+        assertEqual(
+            "https://example.com/läs-mer",
+            one("https://example.com/läs-mer och mer")
+        )
+    end)
+
+    it("still trims trailing punctuation after a non-ASCII path", function()
+        assertEqual(
+            "https://www.wowhead.com/classic/guide/läs-mer",
+            one("see https://www.wowhead.com/classic/guide/läs-mer.")
+        )
+    end)
+
+    it("does not grant a bare domain a non-ASCII TLD it still lacks", function()
+        -- The host class and the allowlist are untouched: "så" is not an
+        -- ASCII TLD on the list, so this must stay a bare sentence.
+        none("hej.så där")
     end)
 end)
 

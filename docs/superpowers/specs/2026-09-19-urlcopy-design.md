@@ -252,8 +252,8 @@ The panel, in declaration order:
 | Control | Store | Default | Does |
 |---|---|---|---|
 | Make URLs in chat clickable | `chat.rewrite` | on | Master toggle. Off means chat is untouched; `/url` still works |
-| URLs to remember | `history.size` | 10 | Slider, 5-25. Shrinking it trims the history immediately |
 | Shorten long links | `chat.shorten` | off | Show only the host in chat for URLs over 40 characters. The box still gets the whole URL |
+| Links to remember | `history.size` | 10 | Slider, 5-25. Shrinking it trims the history immediately |
 
 `chat.rewrite` defaults on: the addon's entire point is clickable links, and a
 feature that is off by default is off at every login on a client that forgets

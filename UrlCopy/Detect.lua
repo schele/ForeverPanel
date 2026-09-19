@@ -30,9 +30,14 @@ end
 -- appear inside one, and "(see example.com/a)" losing its bracket to the link
 -- is the more common failure by a wide margin.
 --
+-- The high-byte range is in for the opposite reason: excluding it truncated
+-- every non-ASCII path (a Swedish "läs-mer") at the first such byte, handing
+-- back a link that looks confident and is not the one posted -- a worse
+-- failure than any this scanner is otherwise built to avoid.
+--
 -- The pipe is in none of these classes, and that is what guarantees a link we
 -- build can never contain one: a pipe ends a match instead of being swallowed.
-local PATH = "[%w%-%._~%%:/%?#@!%$&%*%+,;=]"
+local PATH = "[%w%-%._~%%:/%?#@!%$&%*%+,;=\128-\255]"
 
 -- Punctuation that belongs to the sentence rather than to the URL.
 local TRAILING = "[%.,;:!%?%)%]'\"]+$"
@@ -166,6 +171,18 @@ local function matchAt(message, index)
     if scheme then
         if not SCHEMES[scheme:lower()] then
             return nil
+        end
+
+        -- An optional "user:pass@" before the host. Skipped whole rather than
+        -- left for consumeHost to hit: consumeHost stops at the "@", which
+        -- used to return early with "host" set to the userinfo and the real
+        -- host dropped -- a link truncated to "https://user" is worse than no
+        -- link at all. Absent, there is no bare "@" here for this to match,
+        -- so afterScheme is untouched and consumeHost runs on the host as
+        -- normal.
+        local afterUserinfo = message:match("^[%w%-%._~%%!%$&%*%+,;=:]*@()", afterScheme)
+        if afterUserinfo then
+            afterScheme = afterUserinfo
         end
 
         local host, afterHost = consumeHost(message, afterScheme)

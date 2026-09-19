@@ -128,3 +128,29 @@ describe("installing", function()
         assertEqual(1, #ns.History.All(), "the same URL twice is still one entry")
     end)
 end)
+
+describe("the filter's return shape", function()
+    it("returns suppress, the rewritten message, and every trailing argument in place", function()
+        local ns, env = loggedIn()
+
+        local results = {
+            ns.Chat.Filter(
+                env.ChatFrame1, "CHAT_MSG_SAY", "go to example.com now",
+                "Someone", 7, "General", "GUID-1"
+            ),
+        }
+
+        -- ChatFrame_MessageEventHandler reassigns all seventeen of its own
+        -- arguments from these return slots when the message one is truthy,
+        -- so a filter that drops the tail blanks the author, channel and
+        -- GUID on every rewritten line in the real client. Pinning the count
+        -- as well as each slot is what makes that regression fail loudly.
+        assertEqual(6, #results, "suppress + message + 4 pass-through arguments")
+        assertFalse(results[1])
+        assertMatch("|Hurlcopy:example%.com|h", results[2])
+        assertEqual("Someone", results[3], "author must survive in its slot")
+        assertEqual(7, results[4], "languageID must survive in its slot")
+        assertEqual("General", results[5], "channel name must survive in its slot")
+        assertEqual("GUID-1", results[6], "GUID must survive in its slot")
+    end)
+end)

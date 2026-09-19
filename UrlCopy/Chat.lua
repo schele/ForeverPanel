@@ -128,7 +128,7 @@ function Chat.Filter(_, _, message, ...)
         ns.History.Add(span.text)
     end
 
-    if not ns.db.chat.rewrite then
+    if not (ns.db and ns.db.chat.rewrite) then
         return false
     end
 

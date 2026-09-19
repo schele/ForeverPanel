@@ -77,9 +77,9 @@ The list is kept for the session only and is never saved.
 what lets the fiddly half of this addon be tested outside the client.
 
 `Chat.lua` registers a `ChatFrame_AddMessageEventFilter` on the chat events and
-rewrites each URL it finds into `|Hurlcopy:<url>|h|cff66ccff[<display>]|r|h`, one of the game's own
-hyperlinks with a type of our own. Clicks arrive through a
-`hooksecurefunc("SetItemRef", ...)`, which leaves every other link type
+rewrites each URL it finds into `|Hurlcopy:<url>|h|cff66ccff[<display>]|r|h`,
+one of the game's own hyperlinks with a type of our own. Clicks arrive through
+a `hooksecurefunc("SetItemRef", ...)`, which leaves every other link type
 reaching the client's handler untouched.
 
 The URL travels inside the link rather than as an index into the history, so a

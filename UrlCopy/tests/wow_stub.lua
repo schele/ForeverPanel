@@ -185,24 +185,36 @@ function stub.newEnv()
     end
 
     --- Test helper: push a message through the filters for an event and
-    -- return what chat would show, or nil if it was suppressed.
-    function env.__say(event, message, author)
+    -- return what chat would show, or nil if it was suppressed. Takes and
+    -- returns the full argument list the way ChatFrame_MessageEventHandler
+    -- does -- message plus everything after it (author, language, channel,
+    -- GUID, ...) -- because the real handler reassigns all of them at once
+    -- from a filter's return, not just the message. A stub that only carried
+    -- the message could not catch a filter whose return drops the rest.
+    function env.__say(event, message, ...)
+        local args = { message, ... }
+        local argCount = select("#", ...) + 1
         local filters = env.__filters[event]
-        if not filters then
-            return message
+
+        if filters then
+            for _, filter in ipairs(filters) do
+                local results = { filter(env.ChatFrame1, event, table.unpack(args, 1, argCount)) }
+                if results[1] then
+                    return nil
+                end
+                if results[2] then
+                    -- A truthy newarg1 means the client reassigns every
+                    -- argument from the filter's return, not just the
+                    -- message -- so a filter that drops the tail is exactly
+                    -- what must show up here as lost arguments.
+                    for index = 1, argCount do
+                        args[index] = results[index + 1]
+                    end
+                end
+            end
         end
 
-        for _, filter in ipairs(filters) do
-            local suppress, newMessage = filter(env.ChatFrame1, event, message, author)
-            if suppress then
-                return nil
-            end
-            if newMessage then
-                message = newMessage
-            end
-        end
-
-        return message
+        return table.unpack(args, 1, argCount)
     end
 
     -- The client's own handler. Unknown link types fall through it silently,
