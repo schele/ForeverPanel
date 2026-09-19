@@ -238,3 +238,34 @@ ns.RegisterCommand("off", "Leave chat alone", function()
     ns.db.chat.rewrite = false
     ns.Print("Chat left alone. /url still works.")
 end)
+
+-- Declared next to the code that reads them. Settings.lua renders whatever has
+-- been declared, so adding one here needs no edit there.
+ns.RegisterSetting({
+    store = "chat",
+    key = "rewrite",
+    type = "checkbox",
+    name = "Make URLs in chat clickable",
+    tooltip = "Off leaves chat exactly as it arrives. /url still works, because links are remembered either way.",
+})
+
+ns.RegisterSetting({
+    store = "chat",
+    key = "shorten",
+    type = "checkbox",
+    name = "Shorten long links",
+    tooltip = "Show just the site's name in chat for a long link. The box still gets the whole thing.",
+})
+
+ns.RegisterSetting({
+    store = "history",
+    key = "size",
+    type = "slider",
+    name = "Links to remember",
+    min = 5,
+    max = 25,
+    step = 1,
+    onChange = function(value)
+        History.Trim(value)
+    end,
+})
